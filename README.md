@@ -1,5 +1,6 @@
 
-[![Platform](https://img.shields.io/badge/Platform-macOS_Silicon_%26_Intel-000000?style=for-the-badge&logo=apple)](https://apple.com)
+[![Platform](https://img.shields.io/badge/Platform-macOS_Silicon_%26_Intel-000000?sty<img width="916" height="771" alt="DGAISP" src="https://github.com/user-attachments/assets/3e9abe1f-550e-4eb5-a605-07aa1ce40ae6" />
+le=for-the-badge&logo=apple)](https://apple.com)
 [![Version](https://img.shields.io/badge/Version-2.5_Platinum-blue?style=for-the-badge)](https://github.com/yourusername/repo)
 [![Privacy](https://img.shields.io/badge/Privacy-100%25_Local_Processing-green?style=for-the-badge&logo=shield)](https://github.com/yourusername/repo)
 # DJ-GADGET-AI-SUITE-PRO
