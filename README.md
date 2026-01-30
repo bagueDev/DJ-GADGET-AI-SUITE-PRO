@@ -1,6 +1,7 @@
 
 [![Platform](https://img.shields.io/badge/Platform-macOS_Silicon_%26_Intel-000000?style=for-the-badge&logo=apple)](https://apple.com)
-[![Version](https://img.shields.io/badge/Version-2.4_Platinum-blue?style=for-the-badge)](https://github.com/yourusername/repo)
+[![Windows & Linux](https://img.shields.io/badge/Windows_%26_Linux-Coming_Soon-orange?style=for-the-badge&logo=windows)](https://github.com/yourusername/repo)
+[![Version](https://img.shields.io/badge/Version-2.5_Platinum-blue?style=for-the-badge)](https://github.com/yourusername/repo)
 [![Privacy](https://img.shields.io/badge/Privacy-100%25_Local_Processing-green?style=for-the-badge&logo=shield)](https://github.com/yourusername/repo)
 <img width="500" height="500" alt="DGAISP" src="https://github.com/user-attachments/assets/b1f9d825-82e9-472c-be07-688b56b7ac1b" />
 
@@ -32,10 +33,26 @@ The **DJ Gadget AI-Suite Pro** is the missing link between your DJ software, you
 | **Workflow** | Switch between 5 browser tabs | **All-in-One Interface** |
 | **Limits** | "3 Songs / Day" | **Unlimited** |
 
-# 🛠️ Technical Requirements
+
+## 🛠️ Technical Requirements
 
 *   **OS:** macOS 12 (Monterey) or higher.
-*   **Architecture:** Optimized for Apple Silicon (M1/M2/M3/M4). Intel Macs supported.
+*   **Architecture:**
+    *   🚀 **Apple Silicon (M1/M2/M3/M4):** Native support with Neural Engine acceleration.
+    *   ⚙️ **Intel Macs:** Fully supported and **highly optimized** code path for maximum performance on x86 architecture.
+*   **Memory (RAM):**
+    *   **Minimum:** 8GB (Required).
+    *   **Recommended:** 16GB+ (For heavy AI processing ).
+*   **Legacy Hardware Friendly:**
+    *   Core features are designed to run smoothly even on older machines.
+    *   AI features will automatically adapt to available system resources.
+*   **Storage:** Approx. 1.3GB (without AI Models).
+*   ### 🌍 Cross-Platform Roadmap
+**Windows & Linux support is currently in active development.**
+We are porting the Platinum Engine to Windows 11 and Ubuntu/Debian.
+*   **Status:** Alpha Testing.
+*   **ETA:** Coming with the next major update.
+*   **Goal:** 100% feature parity (including GPU acceleration via CUDA/DirectML).
 
 *   ## 📥 Download & Purchase
 
