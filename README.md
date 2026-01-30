@@ -86,4 +86,4 @@ We are currently beta-testing a module that has **never been seen** in any DJ or
 
 
 *© 2026 DJ Gadget AI-Suite. Built for Creators.*
-* Developed by @bagueDev © All rights reserved *
+Developed by @bagueDev © All rights reserved 
