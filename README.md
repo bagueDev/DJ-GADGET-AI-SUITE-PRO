@@ -4,6 +4,10 @@
 
 The **DJ Gadget AI-Suite Pro** is the missing link between your DJ software, your DAW, and your content creation workflow.
 
+# 🛠️ Technical Requirements
 
+*   **OS:** macOS 12 (Monterey) or higher.
+*   **Architecture:** Optimized for Apple Silicon (M1/M2/M3/M4). Intel Macs supported.
+*   
 *© 2026 DJ Gadget AI-Suite. Built for Creators.*
 Developed by @bagueDev © All rights reserved
