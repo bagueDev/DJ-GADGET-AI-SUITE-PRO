@@ -1,9 +1,8 @@
 
-<img width="500" height="500" alt="DGAISP" src="https://github.com/user-attachments/assets/b1f9d825-82e9-472c-be07-688b56b7ac1b" />
-
 [![Platform](https://img.shields.io/badge/Platform-macOS_Silicon_%26_Intel-000000?style=for-the-badge&logo=apple)](https://apple.com)
 [![Version](https://img.shields.io/badge/Version-2.4_Platinum-blue?style=for-the-badge)](https://github.com/yourusername/repo)
 [![Privacy](https://img.shields.io/badge/Privacy-100%25_Local_Processing-green?style=for-the-badge&logo=shield)](https://github.com/yourusername/repo)
+<img width="500" height="500" alt="DGAISP" src="https://github.com/user-attachments/assets/b1f9d825-82e9-472c-be07-688b56b7ac1b" />
 # DJ-GADGET-AI-SUITE-PRO
 ## 🎧 The All-in-One Local Audio Workstation.
 **Stop paying subscriptions. Stop uploading your creative work to the cloud. Start owning your workflow.**
