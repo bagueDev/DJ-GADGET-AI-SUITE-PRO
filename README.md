@@ -32,7 +32,7 @@ This software is distributed as a signed **DMG installer**.
 ## 🔒 Privacy & Security
 We believe your creative work belongs to you.
 *   **No Data Collection:** The app does not send usage data or audio files to us.
-*   **Local AI:** All models (Whisper, Demucs, Llama) run locally on your hardware.
+*   **Local AI:** All models run locally on your hardware.
 *   **Offline Ready:** Once activated, the app works perfectly without an internet connection (Club Mode).
 
 *© 2026 DJ Gadget AI-Suite. Built for Creators.*
