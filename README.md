@@ -1,3 +1,9 @@
+![Banner Image](https://via.placeholder.com/1200x400?text=DJ+Gadget+AI-Suite+Pro+-+Platinum+Edition)
+*(Replace this link with a screenshot of your app)*
+
+[![Platform](https://img.shields.io/badge/Platform-macOS_Silicon_%26_Intel-000000?style=for-the-badge&logo=apple)](https://apple.com)
+[![Version](https://img.shields.io/badge/Version-2.4_Platinum-blue?style=for-the-badge)](https://github.com/yourusername/repo)
+[![Privacy](https://img.shields.io/badge/Privacy-100%25_Local_Processing-green?style=for-the-badge&logo=shield)](https://github.com/yourusername/repo)
 # DJ-GADGET-AI-SUITE-PRO
 ## 🎧 The All-in-One Local Audio Workstation.
 **Stop paying subscriptions. Stop uploading your creative work to the cloud. Start owning your workflow.**
