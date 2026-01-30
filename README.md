@@ -3,6 +3,7 @@
 [![Windows & Linux](https://img.shields.io/badge/Windows_%26_Linux-Coming_Soon-orange?style=for-the-badge&logo=windows)](https://github.com/yourusername/repo)
 [![Version](https://img.shields.io/badge/Version-2.5_Platinum-blue?style=for-the-badge)](https://github.com/yourusername/repo)
 [![Privacy](https://img.shields.io/badge/Privacy-100%25_Local_Processing-green?style=for-the-badge&logo=shield)](https://github.com/yourusername/repo)
+
 <img width="500" height="500" alt="DGAISP" src="https://github.com/user-attachments/assets/b1f9d825-82e9-472c-be07-688b56b7ac1b" />
 
 ---
