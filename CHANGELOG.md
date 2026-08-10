@@ -1,5 +1,12 @@
 # Changelog - DJ Gadget AI-Suite Pro
 
+### ✨ macOS ARM -Edition 2026-08-12
+- **Port Status 
+  - v2.5 Done
+  - V3.0 in progress!
+
+## [Unreleased] - 2026-05-04
+
 ### ✨ Status Update
 - **Final Test
   - Cleanup
