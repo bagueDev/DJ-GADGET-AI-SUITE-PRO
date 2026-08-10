@@ -5,7 +5,7 @@
   - v2.5 Done
   - V3.0 in progress!
 
-## [Unreleased] - 2026-05-04
+## [Unreleased] - planned release --> Q4/26
 
 ### ✨ Status Update
 - **Final Test
