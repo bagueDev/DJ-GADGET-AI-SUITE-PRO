@@ -111,7 +111,7 @@ class TranscribeTab(ctk.CTkFrame):
         self.file_listbox.bind('<<ListboxSelect>>', self.update_side_preview) # Für das Cover-Update
         
         # 7. Count Label (wieder direkt in list_frame, unter den Container)
-        self.count_label = ctk.CTkLabel(list_frame, text="0 🗂️ Files in the que", text_color="gray", font=("Arial", 12))
+        self.count_label = ctk.CTkLabel(list_frame, text="0 🗂️ Files in the queue", text_color="gray", font=("Arial", 12))
         self.count_label.pack(pady=(0, 5))
         
         # 2. OPTIONEN
@@ -201,7 +201,7 @@ class TranscribeTab(ctk.CTkFrame):
         self.file_listbox.delete(0, tk.END)
         for f in self.selected_files:
             self.file_listbox.insert(tk.END, os.path.basename(f))
-        self.count_label.configure(text=f"{len(self.selected_files)} 🗂️ Files in Que")
+        self.count_label.configure(text=f"{len(self.selected_files)} 🗂️ Files in Queue")
 
     # --- MODEL LOGIC ---
     def get_whisper_offline_dir(self):
