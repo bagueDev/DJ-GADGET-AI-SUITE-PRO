@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+
+# Build
+build/
+dist/
+*.spec
+*.app
+
+# macOS
+.DS_Store
+
+# User data & models
+AI_Models/
+Offline_Models/
+Whisper_Models/
+Chat_History/
+temp_melody/
+temp_*.wav
+temp_*.mp3
+temp_loop_preview.wav
+
+# External binaries (use Git LFS or download separately)
+llama.cpp/
+llama.cpp_*/
+llama_cpp_*/
+llama_server_bin/
+llama_server_bin_backup_*/
+
+# Backups & archives
+Archiv_basis_golden/
+Archiv_m4_backup.zip
+*.bak
+*.bak_*
+chatbot.py.bak*
+
+# Sample backups
+*_bak.wav
+*.bak.wav
+
+# Obsolete build scripts
+build_app_multi.sh
+finalBuildpatch.sh
+
+# Duplicate assets
+Unknown-2.icns
+temp_melody/
