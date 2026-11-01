@@ -132,7 +132,7 @@ Es sind keine KI-Modelle enthalten. Die App ist portabel und läuft auch vom USB
 
 ## 📖 Dokumentation
 
-- Benutzerhandbuch: [`docs/kkommt noch`](docs/)
+- Benutzerhandbuch: [`BENUTZERHANDBUCH`](BENUTZERHANDBUCH.md)
 - Tastenkürzel: **F1** oder der **?**-Button in der App, oder das Shortcut-Cheat-Sheet als PDF in [`Shortcuts`](/SHORTCUTS.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 
