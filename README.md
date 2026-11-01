@@ -133,7 +133,7 @@ No AI models are included. The app is portable and also runs from a USB stick.
 ## 📖 Documentation
 
 - User manual (German): [`BENUTZERHANDBUCH.md`](/BENUTZERHANDBUCH.md)
-- Keyboard shortcuts: press **F1** or the **?** button in the app, or see the shortcut cheat sheet PDF in [`docs/`](/SHORTCUTS.md)
+- Keyboard shortcuts: press **F1** or the **?** button in the app, or see the shortcut cheat sheet PDF in [`Shortcuts/`](/SHORTCUTS.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 
 ## ⚖️ Responsible sampling
