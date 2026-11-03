@@ -91,6 +91,8 @@ Run any GGUF model through llama.cpp (Metal-accelerated) with a system prompt fo
 
 **Optional web access via MCP:** the llama.cpp MCP process is active. Enter the URL of your own MCP server, or use **V.I.N.C.E.N.T.** (our open-source MCP server, [github.com/bagueDev](https://github.com/bagueDev)). Only connect servers you trust, because they give the model tools.
 
+**OpenAI-compatible API:** When the chat engine is running, DJ Gadget exposes a local OpenAI-compatible endpoint at `http://127.0.0.1:8080/v1`. Any OpenAI-compatible tool (Aider, Continue, Cursor, Windsurf, custom scripts) can use it as a backend — just set the base URL. No separate server needed.
+
 ![AI Chat](docs/screenshots/ai-chat.png)
 
 ### 📝 Log
