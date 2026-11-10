@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.1] - 2026-11-11
+
+### 🎲 Melody Lab – Seed & reproduzierbare Ergebnisse (🎹)
+- **Seed-Feld + 🔒 Lock** – ohne Lock würfelt jedes Generate / Full Loop einen neuen Seed (0–999999) und schreibt ihn ins Feld; mit Lock ergibt gleicher Seed + gleiche Einstellungen exakt dieselbe MIDI- und WAV-Datei (auch über Programmstarts hinweg).
+- **Seed sichtbar** – im Status (`✅ Ready! (Seed 521392)`), im Log und als Vorschlag im Dateinamen beim MIDI-Speichern.
+- **Gleiche Noten, neuer Sound** – gleicher Seed mit anderer Waveform liefert dieselbe Melodie; die 2-Takt-Vorschau entspricht dem Anfang der vollen Sequenz; die Melodie allein entspricht der Melodie im Full Loop.
+- **Backend** – `@_seeded`-Decorator in `melody_generator.py` (Kwarg `seed=`, abwärtskompatibel): pro Funktion abgeleiteter Startwert, innere Aufrufe im Full Loop erben den Seed. Ein Lock lässt immer nur eine Generierung gleichzeitig würfeln.
+
+### 🎵 Melody Lab – Motive statt Zufallsfolge (🎹)
+- **Motiv-Engine** – statt jede Note einzeln zu würfeln, erfindet der Generator ein eintaktiges Motiv A und ein Kontrast-Motiv B und baut daraus 4-Takt-Phrasen: `A | A' (Ende variiert) | B | A (Schluss auf dem Akkord-Grundton, gehalten)`.
+- **Motiv folgt der Progression** – der Anker wandert mit dem Akkord-Grundton, das Motiv wird also diatonisch mitverschoben (Sequenz) und bleibt erkennbar.
+- **Messbar mehr Wiederholung** – Rhythmus Takt 1 ↔ Takt 5: 100 % statt ~20 % (Zufallsniveau); Takt 1 ↔ Takt 3 bleibt als Kontrast bei ~25–30 %. Tonbereich bleibt in der gewählten Oktavlage (kein Rand-Kleben).
+- **Verse/Chorus** – je Energie-Stufe des Arrangements ein eigenes Motiv-Paar (Verse: kürzere Töne, reduzierter Tonvorrat; Chorus: längere Töne, volle Skala). Atempause und Mute-Regeln der Arrangements unverändert.
+- Density, Swing, Humanize, Triads-Mode und Seed wirken wie bisher; der alte Zufalls-Modus bleibt im Backend über `motif=False` erreichbar.
+
+### 🎼 Melody Lab – Generator-Fixes (🎹)
+- **Melodie klebte am oberen Rand** – die „Magnet"-Logik wählte fast immer den Ton darüber; ab Takt 3 lagen 87–97 % der Noten ganz oben. Jetzt hat der gewürfelte Ton Vorrang, Nachbartöne sind Ausweichtöne in zufälliger Reihenfolge (7–12 % am Rand, mehr verschiedene Töne, voller Tonbereich).
+- **7 Progression-Presets ohne Rezept** – „Pop Anthem" und „Classic House" scheiterten an einem Leerzeichen, die fünf Reggae-Presets fehlten im Backend ganz und liefen still als „Random". Neuer toleranter Lookup `resolve_progression()` (ignoriert Emojis/Leerzeichen), Reggae-Rezepte ergänzt – 43/43 Presets greifen.
+- **Full Loop mit „Random"** – Chords würfelten pro Takt eine Stufe, Bass und Melodie blieben auf dem Grundton. Jetzt wird einmal ein Preset gewürfelt, das alle Spuren gemeinsam nutzen (steht im Log: `🎲 Random progression used: …`).
+
+### 🎹 Melody Lab – Tab-Fixes (🎹)
+- **Vorschau ersetzt das Ergebnis nicht mehr** – die 2-Takt-Vorschau wird direkt abgespielt; ▶ Play und 💾 MIDI behalten die generierte Sequenz (vorher speicherte MIDI nach einem Dropdown-Wechsel nur die 2 Takte).
+- **Keine Vorschau während einer Generierung.**
+- **⏹ Stop beim Full Loop** zeigt jetzt „⏹ Stopped" statt „❌ Error" und greift auch während des Abmischens.
+- **Fehlerpfad sperrte die Buttons** – `lambda: self._fail(..., e)` lief nach dem `except`-Block in einen `NameError`; Exception wird jetzt fest gebunden.
+- **Echte Fehlerursache im Log-Tab** – der Generator merkt sich den letzten Fehler pro Thread (`get_last_error()`), statt ihn nur ins Terminal zu drucken.
+
+### 🔊 Audio → MIDI (🎹)
+- **Tempo nicht mehr fest 120 BPM** – neues BPM-Feld im Converter: eigener Wert → BPM aus dem Analyzer (wenn der Track dort gescannt ist) → automatische Erkennung. Die Noten liegen damit im DAW auf dem Raster des Tracks; das verwendete Tempo steht in Status, Log und Dialog.
+- **🧽 Smooth funktioniert jetzt** – die Checkbox hatte bisher keine Wirkung. Melody: Medianfilter (~115 ms), gleiche Noten mit < 60 ms Pause werden verbunden, Noten < 90 ms verworfen. Drums: Doppelschläge < 60 ms werden zusammengefasst.
+- **Letzter Ton ging verloren**, wenn das Audio mitten im Ton endet – behoben.
+- „No notes detected" und andere Converter-Fehler erscheinen jetzt im Log-Tab.
+
+### 🔄 Playlist-Update – Fixes (🔍)
+- **Update nach Export fand nie eine Datei** – undefinierte Variable wurde von `except: pass` verschluckt; Export und Update nutzen jetzt denselben `safe_playlist_name()`.
+- **Rückfrage + Backup** – vor dem Überschreiben erscheint eine Ja/Nein-Abfrage mit Dateien und Track-Anzahl (inkl. Warnung bei aktivem Filter); die alte Version wird als `<datei>.bak` gesichert.
+- **Atomares Schreiben** – Inhalt wird im Speicher erzeugt und über eine Temp-Datei ersetzt; ein Fehler hinterlässt keine leere oder halbe Playlist mehr (gilt auch für den Export).
+- „Filter zurücksetzen" vergisst die Playlist nicht mehr; wörtliches `\n` in drei Dialogen korrigiert.
+- Rekordbox-/M3U-/JSON-Erzeugung für Export und Update zusammengelegt.
+
+---
+
 ## [3.3.0] - 2026-11-01
 
 ### ⚡ Stems – MLX-Backend für Apple Silicon (🎧)

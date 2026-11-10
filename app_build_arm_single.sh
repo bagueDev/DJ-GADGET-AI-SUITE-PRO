@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # --- KONFIGURATION ---
-APP_NAME="DJ Gadget AI-Suite Pro v3.3 @bagueDEV ARM"
+APP_NAME="DJ Gadget AI-Suite Pro v3.3.1 @bagueDEV ARM"
 ICON_FILE="icon.icns"
-VERSION="3.3"
+VERSION="3.3.1"
 DEST_APP="dist/$APP_NAME.app"
 
 # Farben

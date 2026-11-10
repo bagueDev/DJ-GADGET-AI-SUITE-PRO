@@ -46,7 +46,7 @@ pygame.mixer.init()
 class DJApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("DJ Gadget AI Suite Pro 2026 v3.3 @bagueDev")
+        self.title("DJ Gadget AI Suite Pro 2026 v3.3.1 @bagueDev")
         self.geometry("1200x800")
         self.closing = False 
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -684,7 +684,7 @@ class DJApp(ctk.CTk):
 
         # 1. Titel & Dev
         ctk.CTkLabel(about, text="© DJ Gadget AI-Suite Pro", font=("Arial", 18, "bold")).pack(pady=(20, 5))
-        ctk.CTkLabel(about, text=" © Version 3.3 | Build 2026 ", text_color="gray").pack()
+        ctk.CTkLabel(about, text=" © Version 3.3.1 | Build 2026 ", text_color="gray").pack()
         ctk.CTkLabel(about, text="Bascharan Guersoy ©", text_color="#007aff", font=("Arial", 12, "bold")).pack(pady=2)
         ctk.CTkLabel(about, text="Developed by @bagueDev", text_color="#007aff", font=("Arial", 12, "bold")).pack(pady=6)
         ctk.CTkLabel(about, text="Copyright © 2026 Bascharan Guersoy (@bagueDev)", text_color="gray", font=("Arial", 10)).pack(pady=1)

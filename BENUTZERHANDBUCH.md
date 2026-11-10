@@ -1,8 +1,8 @@
 # 📘 Benutzerhandbuch — DJ Gadget AI-Suite Pro
 
-**Version 3.3 · Oktober 2026 · Developed by @bagueDev · Kontakt: achten.enteral.5z@icloud.com**
+**Version 3.3.1 · November 2026 · Developed by @bagueDev · Kontakt: achten.enteral.5z@icloud.com**
 
-Dieses Handbuch vereint die bisherigen Einzel-Handbücher (v1.0, v1.4, v1.5, v1.6.3, V2.0) in einem Dokument und ist auf Stand v3.3 aktualisiert. Die Originale liegen im Ordner `Doku und Handbuch/Archiv/`. Detail-Changelogs (v1.5, v1.7, v1.8, v2.0) liegen separat als `.docx`.
+Dieses Handbuch vereint die bisherigen Einzel-Handbücher (v1.0, v1.4, v1.5, v1.6.3, V2.0) in einem Dokument und ist auf Stand v3.3.1 aktualisiert. Die Originale liegen im Ordner `Doku und Handbuch/Archiv/`. Detail-Changelogs (v1.5, v1.7, v1.8, v2.0) liegen separat als `.docx`.
 
 ---
 
@@ -49,6 +49,11 @@ Die App ist portabel — lege sie mit diesen Ordnern zusammen ab (fehlende Ordne
 - Playlist benennen
 - Rekordbox XML (Pioneer), M3U (Traktor/Serato/VLC), JSON (Backup/Dev)
 - 💾 EXPORT speichert in den Musik-Ordner
+- **🔄 UPDATE** überschreibt die zuletzt exportierte oder importierte Playlist-Datei mit der aktuellen Liste, statt eine neue Datei anzulegen.
+  - Vor dem Überschreiben erscheint eine **Rückfrage** mit den betroffenen Dateien und der Track-Anzahl.
+  - Die alte Version wird als **`<datei>.bak`** daneben gesichert. Es gibt immer nur eine Sicherung: das nächste Update überschreibt sie.
+  - ⚠️ **Filter aktiv?** Geschrieben werden nur die sichtbaren Tracks; die Rückfrage warnt dich in dem Fall. Im Zweifel erst den Filter zurücksetzen.
+  - ⚠️ **Importierte Rekordbox-XML:** Update ersetzt die ganze Datei durch die aktuelle Liste. Nicht auf die Original-Sammlung anwenden, sondern auf eine Kopie.
 
 ## 4. Analyzer — Playlist & BPM 🔍
 
@@ -80,13 +85,46 @@ Die App ist portabel — lege sie mit diesen Ordnern zusammen ab (fehlende Ordne
 - **Genre** (13), **Skala** (19, inkl. Exoten), Root-Key, Taktart (4/4, 3/4, 6/8), Oktavlage, Chord-Progression-Presets (~40).
 - **Regler:** Density, Swing, 🤖➡️🧑 Humanize (Velocity + Timing). Sound: sine/saw/square/epiano.
 - **🎲 Generate**, **✨ Full Loop** (alle 6 Spuren + Fortschritt + ⏹ Stop), ▶ Play, 💾 MIDI (DAW-Export). Max. 128 Bars (RAM-Schutz).
-- Dropdown-Wechsel rendern automatisch eine 2-Bar-Vorschau (Debounce).
+- Dropdown-Wechsel (Genre, Waveform, Progression, Voicing) spielen automatisch eine 2-Bar-Vorschau ab. Dein generiertes Ergebnis bleibt dabei erhalten: ▶ Play und 💾 MIDI beziehen sich weiter auf die volle Sequenz. Während einer laufenden Generierung gibt es keine Vorschau.
+- **Progression „Random":** Im Full Loop wird einmal ein Preset gewürfelt, das alle Spuren gemeinsam spielen; welches es war, steht im Log. Im einzelnen Chords-Modus bleibt „Random" eine zufällige Stufe pro Takt.
+
+### Motive 🎵 (neu in v3.3.1)
+Melodien werden nicht mehr Note für Note gewürfelt, sondern aus einem **Motiv** gebaut: einer kurzen, eintaktigen Figur, die wiederkehrt.
+
+- **Aufbau in 4-Takt-Phrasen:** Takt 1 Motiv A · Takt 2 Motiv A mit anderem Ende · Takt 3 Kontrast-Motiv B · Takt 4 Motiv A mit Schluss auf dem Akkord-Grundton.
+- **Mit Progression:** Das Motiv wandert mit den Akkorden mit, bleibt aber erkennbar. Mit „Random" im einzelnen Melody-Modus bleibt es auf dem Grundton.
+- **Density** bestimmt, wie viele Töne das Motiv hat. Bei sehr niedriger Density besteht es nur aus ein, zwei Tönen.
+- **Arrangements** (Radio Edit, DnB Journey …) bekommen für ruhige und volle Abschnitte je ein eigenes Motiv.
+- Gefällt dir ein Motiv nicht: neu generieren. Gefällt es: 🔒 Lock setzen (siehe Seed).
+
+### Seed 🎲 (neu in v3.3.1)
+Der Seed ist die Startzahl für den Zufall. **Gleicher Seed + gleiche Einstellungen = exakt dasselbe Ergebnis** (MIDI und Audio), auch nach einem Neustart.
+
+- **Ohne 🔒 Lock:** Jedes Generate / Full Loop würfelt einen neuen Seed (0–999999) und schreibt ihn ins Feld.
+- **Mit 🔒 Lock:** Die Zahl im Feld wird benutzt. Du kannst auch eine notierte Zahl von früher eintippen.
+- **Wo steht der Seed?** Im Status (`✅ Ready! (Seed 521392)`), im Log und als Vorschlag im Dateinamen beim MIDI-Speichern.
+
+Typische Anwendungen:
+- **Gutes Ergebnis festhalten:** Lock setzen, bevor du weiterklickst, oder den Seed aus dem Log notieren.
+- **Gleiche Melodie, neuer Sound:** Lock an, Waveform wechseln, neu generieren. Die Noten bleiben gleich.
+- **Vorschau passt zum Ergebnis:** Die 2-Bar-Vorschau nutzt den Seed im Feld und entspricht dem Anfang der vollen Sequenz.
+- **Einzelspur aus dem Full Loop:** Mit gleichem Seed, gleichen Einstellungen und derselben Progression liefert 🎶 Melody allein dieselbe Melodie wie im Full Loop.
+
+Ändert sich eine Einstellung, die Noten beeinflusst (Skala, Key, Density, Bars, Progression, Arrangement), ändert sich auch das Ergebnis trotz gleichem Seed.
 
 ### Audio to MIDI Converter
 - Sample laden (MP3/WAV/FLAC/AIFF)
 - Modi: 🎶 Melody (Tonhöhe) / 🥁 Drums (Kick/Snare/Hat)
 - Länge: 10/20/40 s oder Full
-- Sens-Regler filtert Geister-Noten, Smooth glättet (Gesang)
+- **Sens**-Regler filtert Geister-Noten.
+- **🧽 Smooth** (wirkt ab v3.3.1): glättet die erkannte Tonhöhe, verbindet zerhackte gehaltene Töne und verwirft sehr kurze Störnoten. Empfohlen für Gesang und Vibrato; bei schnellen Läufen lieber aus. Im Drums-Modus fasst es doppelt erkannte Schläge zusammen.
+- **🥁 BPM** (neu in v3.3.1): Tempo des Quell-Audios, damit die Noten in der DAW auf dem Raster liegen.
+  - Datei per 📂 gewählt und im Analyzer gescannt → das BPM wird automatisch eingetragen.
+  - Feld leer → das Tempo wird aus dem Audio geschätzt. Die Schätzung ist nur ungefähr (im Test 172,3 statt 174); für exaktes Raster das BPM aus dem Analyzer eintragen.
+  - Eigener Wert (20–300) hat immer Vorrang, z. B. bei Halftime-Fehlern.
+  - Das verwendete Tempo steht danach in Status, Log und Dialog (`manual` / `analyzer` / `detected`).
+- Takt 1 der MIDI-Datei ist der Anfang der Audiodatei. Beginnt dein Sample nicht auf einer Eins, den Clip in der DAW verschieben.
+- Die Datei landet als `<name>_extracted.mid` neben dem Original und überschreibt eine vorhandene gleichnamige Datei ohne Rückfrage.
 
 ## 8. Transcriber 📝
 
@@ -129,6 +167,9 @@ Stems (Vocals) → Analyzer (exakte BPM) → Transcriber (Text) → Melody-Conve
 - **Keine Stems:** ⬇️ Offline Load mit Internet ausgeführt? Log auf Fehler prüfen.
 - **Auto-Tag-Datensicherheit:** überschreibt nur BPM + Key; Artist/Title/Album/Cover/Genre bleiben erhalten (MP3 → ID3v2.3).
 - **Editor speichert:** nur befüllte Felder + ggf. neues Cover; BPM/Key bleiben erhalten.
+- **Melody Lab meldet „❌ Error":** Die genaue Ursache steht im Log-Tab.
+- **Audio-to-MIDI liegt in der DAW neben dem Raster:** BPM-Feld im Converter prüfen und das BPM aus dem Analyzer eintragen.
+- **Playlist nach 🔄 UPDATE falsch:** Die vorherige Version liegt als `<datei>.bak` im selben Ordner. Zum Wiederherstellen die kaputte Datei löschen und bei der Sicherung die Endung `.bak` entfernen.
 
 ## Anhang: Versionen & Quellen
 

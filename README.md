@@ -10,7 +10,7 @@ Library, sampler, stem separation, transcription, melody & MIDI generator and a 
 ![Platform](https://img.shields.io/badge/macOS-12%2B-000000?style=for-the-badge&logo=apple)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-MLX%20%2B%20Metal-blue?style=for-the-badge)
 ![Intel](https://img.shields.io/badge/Intel-supported-lightgrey?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-3.3-orange?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-3.3.1-orange?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-GPLv3-blue?style=for-the-badge)
 ![Local](https://img.shields.io/badge/runs-100%25%20local-success?style=for-the-badge&logo=shield)
 

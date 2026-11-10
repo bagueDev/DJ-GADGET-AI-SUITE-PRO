@@ -10,7 +10,7 @@ Bibliothek, Sampler, Stem-Trennung, Transkription, Melodie- & MIDI-Generator und
 ![Platform](https://img.shields.io/badge/macOS-12%2B-000000?style=for-the-badge&logo=apple)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-MLX%20%2B%20Metal-blue?style=for-the-badge)
 ![Intel](https://img.shields.io/badge/Intel-unterstützt-lightgrey?style=for-the-badge)
-![Version](https://img.shields.io/badge/Version-3.3-orange?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-3.3.1-orange?style=for-the-badge)
 ![License](https://img.shields.io/badge/Lizenz-GPLv3-blue?style=for-the-badge)
 ![Local](https://img.shields.io/badge/läuft-100%25%20lokal-success?style=for-the-badge&logo=shield)
 
