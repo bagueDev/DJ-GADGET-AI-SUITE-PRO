@@ -18,6 +18,61 @@ except ImportError:
         
 import sys
 import os
+import threading
+import functools
+import zlib
+
+# Letzter Fehler pro Thread, damit die GUI die echte Ursache im Log zeigen kann
+# (in der gebauten App gibt es kein Terminal für die print-Ausgaben).
+_tls = threading.local()
+
+def clear_last_error():
+    _tls.error = None
+
+def get_last_error():
+    return getattr(_tls, "error", None)
+
+def get_last_progression():
+    """Progression, die der letzte Full Loop dieses Threads tatsächlich benutzt hat."""
+    return getattr(_tls, "progression", None)
+
+def get_last_bpm():
+    """BPM, mit dem der letzte audio_to_midi-Lauf dieses Threads geschrieben hat."""
+    return getattr(_tls, "bpm", None)
+
+# --- Seed: reproduzierbare Ergebnisse ---------------------------------------
+# Der Generator würfelt über die globalen Zufallsgeneratoren (random, np.random).
+# Das Lock sorgt dafür, dass immer nur eine Generierung gleichzeitig würfelt,
+# sonst würden sich z.B. Vorschau und Generate gegenseitig die Zahlen wegnehmen.
+_GEN_LOCK = threading.RLock()
+
+def _seeded(fn):
+    """Macht eine Generator-Funktion per seed=... reproduzierbar.
+
+    Jede Funktion bekommt einen eigenen, aus Seed + Funktionsname abgeleiteten
+    Startwert. Innere Aufrufe (Full Loop -> Drums, Chords, ...) erben den Seed,
+    deshalb ergibt z.B. die Melodie allein dieselben Noten wie im Full Loop.
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, seed=None, **kwargs):
+        with _GEN_LOCK:
+            outer = getattr(_tls, "seed", None)
+            if seed is None: seed = outer
+            if seed is None:
+                return fn(*args, **kwargs)
+            _tls.seed = seed
+            try:
+                derived = zlib.crc32(f"{int(seed)}:{fn.__name__}".encode())
+                random.seed(derived)
+                np.random.seed(derived)
+                return fn(*args, **kwargs)
+            finally:
+                _tls.seed = outer
+    return wrapper
+
+def _report_error(label, e):
+    _tls.error = f"{label}: {type(e).__name__}: {e}"
+    print(f"❌ {_tls.error}")
 
 def get_base_path():
     """Findet den Ordner, in dem die App oder das Skript liegt."""
@@ -99,6 +154,12 @@ PROGRESSIONS = {
     "🧨 Drill: 6-b6-5-b5": [5, "b5", 4, "b4"],
     "🌤 Lo-Fi: 1-3-2-5": [0, 2, 1, 4],
     "🎛️ Modern Trap: 1-6 Tension": [0, 5],    
+    "--- 🦁 REGGAE & DUB ---": None,
+    "🎸 Reggae: I-IV Loop": [0, 3],
+    "🌅 Reggae: Chill (I-ii)": [0, 1],
+    "🇯🇲 Reggae: Roots (i-VII)": [0, 6],
+    "☀️ Reggae: Positive (I-IV-V-IV)": [0, 3, 4, 3],
+    "❤️ Reggae: Lovers Rock (I-vi-IV-V)": [0, 5, 3, 4],
     "--- 🌍 STYLE / WORLD ---": None,
     "🕌 Middle Eastern: 1-b2-b3-5": [0, "b1", "b2", 4],
     "🇧🇷 Samba: 2-5-3-6": [1, 4, 2, 5],
@@ -114,6 +175,23 @@ PROGRESSIONS = {
     "🏃 Jazz: Giant": [0, "b2", 4, "b6", 1] # Ein Hauch von "Giant Steps"
     
 }
+
+def _prog_key(name):
+    """Vergleichsschlüssel ohne Emojis/Leerzeichen, damit GUI-Name und Rezept
+    nicht an einem fehlenden Leerzeichen scheitern."""
+    return "".join(c for c in str(name).lower() if c.isascii() and (c.isalnum() or c in "-#/()"))
+
+_PROG_LOOKUP = {_prog_key(k): v for k, v in PROGRESSIONS.items() if v}
+
+def resolve_progression(name):
+    """Rezept zu einem Preset-Namen; None bei 'Random', Trennzeilen und Unbekanntem."""
+    if not name or str(name).strip().startswith("---"):
+        return None
+    return _PROG_LOOKUP.get(_prog_key(name))
+
+def pick_random_progression():
+    """Name eines zufälligen Presets (damit alle Spuren dieselbe Harmonie bekommen)."""
+    return random.choice([k for k, v in PROGRESSIONS.items() if v])
 
 GENRE_PROFILES = {
     "Random": {
@@ -321,6 +399,7 @@ def get_chromatic_note(scale_notes, step):
         return scale_notes[0] # Fallback
     return scale_notes[0]
 
+@_seeded
 def create_chord_files(root, scale, bpm, bars, progression_name, mode, output_dir, voicing_style="Root Position", sound="sine", genre="Ambient", density=80, swing=0, time_sig="4/4", human=False, arr_mode="♾️ Infinite Loop"):
     try:
         os.makedirs(output_dir, exist_ok=True)
@@ -379,9 +458,9 @@ def create_chord_files(root, scale, bpm, bars, progression_name, mode, output_di
             current_dur = steps_per_bar if energy < 0.4 else dur
             # ... (Hier nutzt du jetzt 'current_mode' beim Bauen der Akkord-Noten 
             # und 'current_pattern'/'current_dur' in der Rhythmus-Schleife) ...
-            prog_data = PROGRESSIONS.get(progression_name)
+            prog_data = resolve_progression(progression_name)
             
-            if prog_data and not progression_name.strip().startswith("---"):
+            if prog_data:
                 step_data = prog_data[bar % len(prog_data)]
                 
                 # --- FIX: Wir bestimmen den Basis-Index (0-6) direkt ---
@@ -514,7 +593,7 @@ def create_chord_files(root, scale, bpm, bars, progression_name, mode, output_di
 
         return wav_path, mid_path
     except Exception as e:
-        print(f"❌ Chord Rhythm Error: {e}"); return None, None
+        _report_error("Chord Rhythm Error", e); return None, None
             
 def apply_voicing(chord_notes, style, last_chord=None):
     """Sortiert die Noten des Akkords um, um Inversions zu erzeugen."""
@@ -560,7 +639,8 @@ def apply_voicing(chord_notes, style, last_chord=None):
 # ==========================================
 # TEIL 1: MELODY GENERATOR
 # ==========================================
-def create_melody_files(root, scale, bpm, bars, time_sig, octave, mode, density, swing, human, sound, genre, prog, output_dir, arr_mode="♾️ Infinite Loop"):
+@_seeded
+def create_melody_files(root, scale, bpm, bars, time_sig, octave, mode, density, swing, human, sound, genre, prog, output_dir, arr_mode="♾️ Infinite Loop", motif=True):
     try:
         # In jeder der Generierungs-Funktionen ganz oben einfügen:
         os.makedirs(output_dir, exist_ok=True)
@@ -604,89 +684,201 @@ def create_melody_files(root, scale, bpm, bars, time_sig, octave, mode, density,
         # --- 3. GENERIERUNG MIT HARMONY-LINK ---
         # Erst das Rezept finden (wie bei den Chords)
         # --- 3. GENERIERUNG MIT DYNAMISCHER SKALEN-EVOLUTION ---
-        prog_data = None
-        if prog and not prog.strip().startswith("---"):
-            for key in PROGRESSIONS.keys():
-                if key != "Random" and key in prog:
-                    prog_data = PROGRESSIONS[key]; break
+        prog_data = resolve_progression(prog)
 
-        generated_events = [] 
-        step = 0
-        last_note_index = len(allowed_notes) // 2 
-        
-        while step < total_steps:
-            # --- 1. ZEIT-VARIABLEN ZUERST DEFINIEREN ---
-            current_bar = step // steps_per_bar
-            is_downbeat = (step % steps_per_bar == 0)
-            
-            # Energie für diesen Takt holen
-            energy = get_arrangement_energy(current_bar, int(bars), arr_mode)            
-            # --- 2. REGIE-CHECKS (BREATHING & MUTE) ---            
-            # A: Melodic Breathing (Pause in jedem 3. Takt eines 4er Blocks)
-            is_breathing = (current_bar % 4 == 2) and "Infinite" not in arr_mode
-            
-            # B: Mute-Matrix (Melodie schweigt bei niedriger Energie)
-            is_muted = (energy < 0.6)
+        generated_events = []
 
-            if is_breathing or is_muted:
-                generated_events.append((None, 1))
-                step += 1
-                continue # Jetzt ist es sicher, weil die Variablen oben definiert wurden!
+        if motif:
+            # --- MOTIV-ENGINE -------------------------------------------------
+            # Statt jede Note einzeln zu würfeln, wird pro Energie-Stufe ein
+            # eintaktiges Motiv A (und ein Kontrast-Motiv B) erfunden und in
+            # 4-Takt-Phrasen wiederverwendet:   A | A' (Ende variiert) | B | A (Schluss)
+            # Ein Motiv = Liste (Startschritt, Dauer, Stufen-Abstand zum Anker).
+            # Der Anker folgt dem Akkord-Grundton, das Motiv wandert also mit
+            # der Progression mit (Sequenz) und bleibt trotzdem erkennbar.
+            n_pool = len(allowed_notes)
+            home = n_pool // 2
+            jump_range = 5 if ("Jazz" in genre or "Arp" in genre) else 2
+            low_steps = [0, 2, 4, 7, 9] if "Major" in scale else [0, 2, 3, 7, 8]
+            motifs = {}
 
-            # --- 3. ECHTE GENERIERUNG ---
-            if random.random() < prob:
-                # Harmonischen Anker für DIESEN Takt finden (Harmony-Link)
+            def _clamp_off(o):
+                return max(-4, min(5, o))
+
+            def _make_motif(lengths, first_offset):
+                best = []
+                for _ in range(4):  # ein paar Versuche, damit das Motiv nicht leer bleibt
+                    cand, pos, off = [], 0, first_offset
+                    while pos < steps_per_bar:
+                        if random.random() < prob:
+                            dur = min(random.choice(lengths), steps_per_bar - pos)
+                            if cand:
+                                move = random.randint(-jump_range, jump_range)
+                                if move == 0 and random.random() < 0.7:
+                                    move = random.choice([-1, 1])  # Tonwiederholung nur gelegentlich
+                                off = _clamp_off(off + move)
+                            cand.append((pos, dur, off))
+                            pos += dur
+                        else:
+                            pos += 1
+                    if len(cand) > len(best): best = cand
+                    if len(best) >= 2: break
+                return best or [(0, min(lengths[-1], steps_per_bar), first_offset)]
+
+            def _vary(m):
+                """Gleicher Rhythmus, anderes Ende (letzte 1-2 Töne verschoben)."""
+                m = list(m)
+                k = 1 if len(m) < 4 else 2
+                for i in range(max(0, len(m) - k), len(m)):
+                    pos, dur, off = m[i]
+                    m[i] = (pos, dur, _clamp_off(off + random.choice([-2, -1, 1, 2])))
+                return m
+
+            def _cadence(m):
+                """Phrasenschluss: letzter Ton landet auf dem Akkord-Grundton und wird gehalten."""
+                m = list(m)
+                pos, dur, _ = m[-1]
+                m[-1] = (pos, min(steps_per_bar - pos, max(dur, 4)), 0)
+                return m
+
+            def _anchor(chord_root):
+                """Skalenton, der dem Akkord-Grundton am nächsten kommt – möglichst in der Mitte des Tonbereichs."""
+                def pc_dist(i):
+                    d = (allowed_notes[i] - chord_root) % 12
+                    return min(d, 12 - d)
+                return min(range(n_pool), key=lambda i: (pc_dist(i), abs(i - home)))
+
+            for bar in range(int(bars)):
+                energy = get_arrangement_energy(bar, int(bars), arr_mode)
+                # Regie wie bisher: Atempause im 3. Takt jedes 4er-Blocks, Stille bei wenig Energie
+                is_breathing = (bar % 4 == 2) and "Infinite" not in arr_mode
+                if is_breathing or energy < 0.6:
+                    generated_events.extend([(None, 1)] * steps_per_bar)
+                    continue
+
+                high = energy >= 0.8  # Chorus: längere Töne, volle Skala / Verse: kürzer, pentatonisch
+                if ("A", high) not in motifs:
+                    lengths = [2, 4] if high else [1, 2]
+                    motifs[("A", high)] = _make_motif(lengths, 0)
+                    motifs[("B", high)] = _make_motif(lengths, random.choice([2, 4]))
+
+                role, phrase = bar % 4, bar // 4
+                if role == 0:   m = motifs[("A", high)]
+                elif role == 1: m = _vary(motifs[("A", high)])
+                elif role == 2: m = motifs[("B", high)] if phrase % 2 == 0 else _vary(motifs[("B", high)])
+                else:           m = _cadence(motifs[("A", high)])
+
                 if prog_data:
-                    step_in_prog = prog_data[current_bar % len(prog_data)]
-                    chord_root = get_chromatic_note(scale_notes, step_in_prog) % 12
+                    chord_root = get_chromatic_note(scale_notes, prog_data[bar % len(prog_data)]) % 12
                 else:
                     chord_root = NOTES.get(root, 0)
+                anchor = _anchor(chord_root)
 
-                # Tonvorrat anpassen (Verse vs. Chorus)
-                if energy < 0.8:
-                    allowed_steps = [0, 2, 4, 7, 9] if "Major" in scale else [0, 2, 3, 7, 8]
-                else:
-                    allowed_steps = SCALES.get(scale, [0, 2, 4, 5, 7, 9, 11])
-
-                # Random Walk & Magnetismus
-                jump_range = 5 if ("Jazz" in genre or "Arp" in genre) else 2
-                new_index = max(0, min(len(allowed_notes)-1, last_note_index + random.randint(-jump_range, jump_range)))
-                
-                # Kandidaten prüfen (Magnet-Logik)
-                candidates = [new_index, max(0, new_index-1), min(len(allowed_notes)-1, new_index+1)]
-                best_note_idx = new_index
-                
-                for c_idx in candidates:
-                    note_val = allowed_notes[c_idx]
-                    if (note_val % 12) == chord_root or ((note_val % 12) - chord_root) % 12 in allowed_steps:
-                        best_note_idx = c_idx
-                        if is_downbeat and (note_val % 12) == chord_root:
-                            break
-                
-                new_index = best_note_idx
-                root_note = allowed_notes[new_index]
-                last_note_index = new_index
-                
-                notes_to_play = [root_note]
-
-                # Polyphonie bei hoher Energie
-                try:
+                onsets = {pos: (dur, off) for pos, dur, off in m}
+                pos = 0
+                while pos < steps_per_bar:
+                    if pos not in onsets:
+                        generated_events.append((None, 1))
+                        pos += 1
+                        continue
+                    dur, off = onsets[pos]
+                    idx = max(0, min(n_pool - 1, anchor + off))
+                    if not high and (allowed_notes[idx] - chord_root) % 12 not in low_steps:
+                        # Verse: auf den reduzierten Tonvorrat ausweichen (Nachbarton, zufällige Richtung)
+                        nb = [i for i in (idx - 1, idx + 1) if 0 <= i < n_pool]
+                        random.shuffle(nb)
+                        idx = next((i for i in nb if (allowed_notes[i] - chord_root) % 12 in low_steps), idx)
+                    notes_to_play = [allowed_notes[idx]]
                     if "Triads" in mode and energy > 0.9:
-                        notes_to_play.append(allowed_notes[new_index + 2])
-                        notes_to_play.append(allowed_notes[new_index + 4])
-                except: pass
+                        notes_to_play += [allowed_notes[i] for i in (idx + 2, idx + 4) if i < n_pool]
+                    generated_events.append((notes_to_play, dur))
+                    pos += dur
 
-                # Dauer
-                lengths = [1, 2] if energy < 0.8 else [2, 4]
-                duration = random.choice(lengths)
-                if step + duration > total_steps: duration = total_steps - step
-                
-                generated_events.append((notes_to_play, duration))
-                step += duration
-            else:
-                generated_events.append((None, 1))
-                step += 1
+        else:
+            # --- ALTER ZUFALLS-MODUS (jede Note einzeln gewürfelt) ---
+            step = 0
+            last_note_index = len(allowed_notes) // 2 
         
+            while step < total_steps:
+                # --- 1. ZEIT-VARIABLEN ZUERST DEFINIEREN ---
+                current_bar = step // steps_per_bar
+                is_downbeat = (step % steps_per_bar == 0)
+            
+                # Energie für diesen Takt holen
+                energy = get_arrangement_energy(current_bar, int(bars), arr_mode)            
+                # --- 2. REGIE-CHECKS (BREATHING & MUTE) ---            
+                # A: Melodic Breathing (Pause in jedem 3. Takt eines 4er Blocks)
+                is_breathing = (current_bar % 4 == 2) and "Infinite" not in arr_mode
+            
+                # B: Mute-Matrix (Melodie schweigt bei niedriger Energie)
+                is_muted = (energy < 0.6)
+
+                if is_breathing or is_muted:
+                    generated_events.append((None, 1))
+                    step += 1
+                    continue # Jetzt ist es sicher, weil die Variablen oben definiert wurden!
+
+                # --- 3. ECHTE GENERIERUNG ---
+                if random.random() < prob:
+                    # Harmonischen Anker für DIESEN Takt finden (Harmony-Link)
+                    if prog_data:
+                        step_in_prog = prog_data[current_bar % len(prog_data)]
+                        chord_root = get_chromatic_note(scale_notes, step_in_prog) % 12
+                    else:
+                        chord_root = NOTES.get(root, 0)
+
+                    # Tonvorrat anpassen (Verse vs. Chorus)
+                    if energy < 0.8:
+                        allowed_steps = [0, 2, 4, 7, 9] if "Major" in scale else [0, 2, 3, 7, 8]
+                    else:
+                        allowed_steps = SCALES.get(scale, [0, 2, 4, 5, 7, 9, 11])
+
+                    # Random Walk & Magnetismus
+                    jump_range = 5 if ("Jazz" in genre or "Arp" in genre) else 2
+                    new_index = max(0, min(len(allowed_notes)-1, last_note_index + random.randint(-jump_range, jump_range)))
+                
+                    # Kandidaten prüfen (Magnet-Logik)
+                    # Der gewürfelte Ton hat Vorrang; die Nachbarn (in zufälliger Reihenfolge,
+                    # damit es keinen Drall nach oben oder unten gibt) sind nur Ausweichtöne.
+                    neighbors = [max(0, new_index-1), min(len(allowed_notes)-1, new_index+1)]
+                    random.shuffle(neighbors)
+                    candidates = [new_index] + neighbors
+
+                    def _rel(c_idx):
+                        return (allowed_notes[c_idx] % 12 - chord_root) % 12
+
+                    best_note_idx = None
+                    if is_downbeat:
+                        # Auf der Eins zieht der Akkord-Grundton
+                        best_note_idx = next((c for c in candidates if _rel(c) == 0), None)
+                    if best_note_idx is None:
+                        best_note_idx = next((c for c in candidates if _rel(c) == 0 or _rel(c) in allowed_steps), new_index)
+
+                    new_index = best_note_idx
+                    root_note = allowed_notes[new_index]
+                    last_note_index = new_index
+                
+                    notes_to_play = [root_note]
+
+                    # Polyphonie bei hoher Energie
+                    try:
+                        if "Triads" in mode and energy > 0.9:
+                            notes_to_play.append(allowed_notes[new_index + 2])
+                            notes_to_play.append(allowed_notes[new_index + 4])
+                    except: pass
+
+                    # Dauer
+                    lengths = [1, 2] if energy < 0.8 else [2, 4]
+                    duration = random.choice(lengths)
+                    if step + duration > total_steps: duration = total_steps - step
+                
+                    generated_events.append((notes_to_play, duration))
+                    step += duration
+                else:
+                    generated_events.append((None, 1))
+                    step += 1
+        
+
         # 4. MIDI schreiben
         ticks_per_16th = mid.ticks_per_beat // 4
         current_step = 0  # Wir müssen mitzählen, bei welchem Step wir sind
@@ -792,11 +984,12 @@ def create_melody_files(root, scale, bpm, bars, time_sig, octave, mode, density,
         return wav_path, mid_path
 
     except Exception as e:
-        print(f"❌ Melody Error: {e}")
+        _report_error("Melody Error", e)
         return None, None   
 # ==========================================
 # TEIL 2: DRUM GENERATOR (NEU!)
 # ==========================================
+@_seeded
 def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_sig="4/4",arr_mode="♾️ Infinite Loop"):
     try:
         # 1. Grund-Setup
@@ -1389,13 +1582,17 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
         return wav_path, mid_path
 
     except Exception as e:
-        print(f"Drum Gen Error: {e}")
+        _report_error("Drum Gen Error", e)
         return None, None
 # ==========================================
 # TEIL 3: AUDIO TO MIDI (Converter)
 # ==========================================
-def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smooth):
+def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smooth, bpm=None):
+    """bpm=None/0 -> Tempo wird aus dem Audio erkannt. Das Tempo landet in der
+    MIDI-Datei und bestimmt die Umrechnung Sekunden -> Beats, damit die Noten
+    im DAW auf dem Raster des Tracks liegen."""
     try:
+        _tls.bpm = None
         print(f"Converting: {os.path.basename(audio_path)}...")
         
         # 1. Audio laden
@@ -1408,9 +1605,21 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
         mid = MidiFile()
         track = MidiTrack()
         mid.tracks.append(track)
-        track.append(MetaMessage('set_tempo', tempo=500000)) # 120 BPM
-        
-        ticks_per_sec = 2 * mid.ticks_per_beat
+
+        if not bpm or bpm <= 0:
+            try:
+                detected, _ = librosa.beat.beat_track(y=y, sr=sr)
+                bpm = float(np.atleast_1d(detected)[0])
+            except Exception as e:
+                print(f"⚠️ BPM detection failed ({e}), using 120.")
+                bpm = 0
+            if not (20 <= bpm <= 300): bpm = 120.0
+        bpm = round(float(bpm), 2)
+        _tls.bpm = bpm
+        print(f"Tempo: {bpm} BPM")
+        track.append(MetaMessage('set_tempo', tempo=int(round(60_000_000 / bpm))))
+
+        ticks_per_sec = (bpm / 60.0) * mid.ticks_per_beat
         events = []
 
         # --- A. MELODY (Pitch - PYIN) ---
@@ -1421,26 +1630,42 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
             midi_notes = librosa.hz_to_midi(f0)
             times = librosa.times_like(f0, sr=sr)
             
-            current_note = None
-            start_time = 0
-            for i, (note, is_voiced, prob) in enumerate(zip(midi_notes, voiced_flag, voiced_probs)):
-                if is_voiced and prob > sensitivity:
-                    note_int = int(round(note))
-                    if current_note is None:
-                        current_note = note_int
-                        start_time = times[i]
-                    elif current_note != note_int:
-                        end_time = times[i]
-                        if (end_time - start_time) > 0.05:
-                            events.append((start_time, end_time, current_note))
-                        current_note = note_int
-                        start_time = times[i]
-                else:
-                    if current_note is not None:
-                        end_time = times[i]
-                        if (end_time - start_time) > 0.05:
-                            events.append((start_time, end_time, current_note))
-                        current_note = None
+            # Pro Analyse-Frame (~23 ms) eine Note, -1 = kein Ton
+            frame_notes = np.full(len(midi_notes), -1, dtype=int)
+            ok = np.asarray(voiced_flag, dtype=bool) & (np.asarray(voiced_probs) > sensitivity) & np.isfinite(midi_notes)
+            frame_notes[ok] = np.round(midi_notes[ok]).astype(int)
+
+            min_len = 0.05
+            if smooth:
+                # Medianfilter über 5 Frames (~115 ms): entfernt kurze Ausreißer
+                # (Vibrato, Oktavsprünge) und schließt Mini-Lücken in gehaltenen Tönen.
+                from scipy.signal import medfilt
+                if len(frame_notes) >= 5:
+                    frame_notes = medfilt(frame_notes.astype(float), kernel_size=5).astype(int)
+                min_len = 0.09
+
+            # Frames zu Noten zusammenfassen
+            hop = float(times[1] - times[0]) if len(times) > 1 else 0.023
+            raw = []
+            current_note, start_time = -1, 0.0
+            for i, n in enumerate(frame_notes):
+                if n != current_note:
+                    if current_note >= 0: raw.append([start_time, times[i], current_note])
+                    current_note, start_time = n, times[i]
+            if current_note >= 0 and len(times):
+                raw.append([start_time, times[-1] + hop, current_note])  # Ton klingt bis zum Dateiende
+
+            if smooth:
+                # Gleiche Note nach winziger Pause (< 60 ms) = ein gehaltener Ton
+                merged = []
+                for ev in raw:
+                    if merged and merged[-1][2] == ev[2] and (ev[0] - merged[-1][1]) < 0.06:
+                        merged[-1][1] = ev[1]
+                    else:
+                        merged.append(ev)
+                raw = merged
+
+            events = [(st, en, n) for st, en, n in raw if (en - st) > min_len]
 
         # --- B. DRUMS (Smart Onset + Frequency) ---
         else:
@@ -1462,8 +1687,13 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
             spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
             times = librosa.frames_to_time(onset_frames, sr=sr)
             
+            last_hit = -1.0
             for i, frame in enumerate(onset_frames):
                 t = times[i]
+                # Smooth: doppelt erkannte Schläge (< 60 ms Abstand) zusammenfassen
+                if smooth and (t - last_hit) < 0.06:
+                    continue
+                last_hit = t
                 
                 # Wir schauen uns die Helligkeit an diesem Zeitpunkt an
                 # (Sicherheitscheck, falls Frame out of bounds)
@@ -1484,7 +1714,8 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
 
         # 3. Schreiben
         if not events:
-            print("❌ No notes detected. Try increasing sensitivity.")
+            _tls.error = "No notes detected. Try increasing sensitivity."
+            print(f"❌ {_tls.error}")
             return False
 
         events.sort(key=lambda x: x[0])
@@ -1506,9 +1737,10 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
         return True
 
     except Exception as e:
-        print(f"MIDI Error: {e}")
+        _report_error("MIDI Error", e)
         return False
 
+@_seeded
 def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_style="Steady (Groove)", density=80, swing=0, time_sig="4/4", arr_mode="♾️ Infinite Loop"):
     try:
         os.makedirs(output_dir, exist_ok=True)
@@ -1535,10 +1767,7 @@ def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_styl
             for i in intervals: scale_notes.append(base_note_ref + oct_off + i)
 
         # Smart Progression Lookup
-        prog_data = None
-        for key in PROGRESSIONS.keys():
-            if key != "Random" and key in prog:
-                prog_data = PROGRESSIONS[key]; break
+        prog_data = resolve_progression(prog)
 
         # 3. RHYTHMUS-ENTSCHEIDUNG (Hard-Grid Wahl)
         events = []
@@ -1651,8 +1880,9 @@ def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_styl
         sf.write(wav_path, audio_buffer, sr)
         return wav_path, mid_path
     except Exception as e:
-        print(f"❌ Bass Error: {e}"); return None, None
+        _report_error("Bass Error", e); return None, None
                                 
+@_seeded
 def create_full_loop(root, scale, bpm, bars, time_sig, octave, mode, density, swing, human, sound, genre, prog, voicing, bass_style, arr_mode, output_dir, progress_cb=None, stop_event=None):
     try:
         os.makedirs(output_dir, exist_ok=True)
@@ -1665,6 +1895,13 @@ def create_full_loop(root, scale, bpm, bars, time_sig, octave, mode, density, sw
 
         def _stopped():
             return stop_event is not None and stop_event.is_set()
+
+        # "Random" (oder unbekannt): EIN Preset würfeln, das Chords, Bass, Melodie,
+        # Pads und Strings gemeinsam nutzen – sonst spielt jede Spur eine andere Harmonie.
+        if resolve_progression(prog) is None:
+            prog = pick_random_progression()
+            print(f"🎲 Random progression for this loop: {prog}")
+        _tls.progression = prog
 
         # 1. GENERIERUNG (Die 4 Einzelteile)
         print("-> Step 1: Generating Drums...")
@@ -1719,6 +1956,10 @@ def create_full_loop(root, scale, bpm, bars, time_sig, octave, mode, density, sw
             print("❌ Error: One of the generators failed (returned None).")
             return None, None
 
+        if _stopped():
+            print("⏹ FULL LOOP STOPPED BY USER (vor dem Mix)")
+            return None, None
+
         # 3. AUDIO MIXING ENGINE (Crash-Sicherer Stereo-Mix)
         print("-> Step 6: Mixing Audio Tracks (Stereo Conversion)...")
         sr = 44100
@@ -1759,17 +2000,21 @@ def create_full_loop(root, scale, bpm, bars, time_sig, octave, mode, density, sw
             final_mix = final_mix / max_v * 0.85
         
         full_wav_path = os.path.join(output_dir, "full_loop.wav")
+        if _stopped():
+            print("⏹ FULL LOOP STOPPED BY USER (nach dem Mix)")
+            return None, None
         sf.write(full_wav_path, final_mix, sr)
 
         print("✅ --- FULL 6-TRACK LOOP COMPLETED ---")
         return full_wav_path, full_mid_path
 
     except Exception as e:
-        print(f"❌ CRITICAL FULL LOOP ERROR: {e}")
+        _report_error("Full Loop Error", e)
         import traceback
         traceback.print_exc()
         return None, None
     
+@_seeded
 def generate_pad_midi(root, scale, bars, prog, output_dir):
     """Spur 5: Erzeugt lange, liegende Akkorde auf Kanal 4 (Chromatisch sicher)."""
     mid_path = os.path.join(output_dir, "generated_pads.mid")
@@ -1782,10 +2027,7 @@ def generate_pad_midi(root, scale, bars, prog, output_dir):
     for oct_off in [0, 12, 24]:
         for i in intervals: scale_notes.append(base_note + oct_off + i)
     
-    prog_data = None
-    for key in PROGRESSIONS.keys():
-        if key != "Random" and key in prog:
-            prog_data = PROGRESSIONS[key]; break
+    prog_data = resolve_progression(prog)
     
     ticks_per_bar = mid.ticks_per_beat * 4
     last_tick = 0
@@ -1817,6 +2059,7 @@ def generate_pad_midi(root, scale, bars, prog, output_dir):
     mid.save(mid_path)
     return mid_path
 
+@_seeded
 def generate_strings_midi(root, scale, bars, prog, genre, output_dir):
     """Spur 6: Erzeugt intelligente Streicher auf Kanal 5 (Chromatisch sicher)."""
     mid_path = os.path.join(output_dir, "generated_strings.mid")
@@ -1829,10 +2072,7 @@ def generate_strings_midi(root, scale, bars, prog, genre, output_dir):
     for oct_off in [0, 12, 24]:
         for i in intervals: scale_notes.append(base_note_ref + oct_off + i)
     
-    prog_data = None
-    for key in PROGRESSIONS.keys():
-        if key != "Random" and key in prog:
-            prog_data = PROGRESSIONS[key]; break
+    prog_data = resolve_progression(prog)
 
     ticks_per_bar = mid.ticks_per_beat * 4
     ticks_per_16th = mid.ticks_per_beat // 4
