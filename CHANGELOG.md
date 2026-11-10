@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - About-Fenster zeigte `Version 3.0` – jetzt `3.3` (passend zu Titel + Build); Kontakt-E-Mail aktualisiert.
 - Genre-Dropdown im Melody-Tab war nach Refactoring unsichtbar (fehlende `.grid()`-Zeile) – wiederhergestellt.
 - Tippfehler „ore folder" → „or folder" im Analyzer-Pfad-Eingabefeld.
+- JSON-Export-Fehler `Object of type ndarray is not JSON serializable` behoben (numpy-Typen werden jetzt konvertiert).
+- „Que" → „Queue" Tippfehler im Transcriber (2 Stellen).
+
+### ✨ Features
+- **Playlist Update-Button** (🔄 UPDATE) – aktualisiert bestehende Playlist-Dateien in place (XML/M3U/JSON) ohne neue Datei zu erstellen.
+- **CORS-Hardening** – llama-server nur für localhost-Origins (`--cors-origins`), verhindert Prompt-Injection über bösartige Websites.
 
 ### 🔐 Lizenz & Open Source
 - **GPLv3** als Projekt-Lizenz: `LICENSE`-Datei (vollständiger GPLv3-Text), `THIRD_PARTY_LICENSES.md` (Lizenzen aller Dependencies).
@@ -48,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **llama-server aktualisiert** auf 0.8.0-dev (build 12032, commit dde879bc4) — ersetzt 9687 (b4024af6c).
 - **Config-Datei Override** (`~/.djgadget/chat_server.json`) — eigene llama-server-Binary nutzen ohne Rebuild (Env-Var → Config → bundled → dev).
 - **Chat-Tab UI** — neue Zeile „🔧 Server-Binary (optional)" mit Datei-Picker (📂) und Löschen (🗑️).
+- **Chat-Tab Regler** — TopP (🎯) und TopK (🔝) Slider hinzugefügt (2-reihiges Layout: Temp/MaxT/Rep + TopP/TopK/Ctx).
 - **`.gitignore`** erstellt — venv, build, dist, Modelle, Binaries, Backups ausgeschlossen.
 - **Samples umbenannt** mit `bagueDEV_`-Prefix (24 Dateien), `sample_map` aktualisiert.
 - **Build-Skript bereinigt** — `--collect-all "llama_cpp"` entfernt (verhindert dylib-Konflikt mit neuer Binary), `license_guard` entfernt.
