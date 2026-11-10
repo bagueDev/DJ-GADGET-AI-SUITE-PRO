@@ -10,6 +10,7 @@ import time
 import platform
 import subprocess
 import json
+import shutil
 import mutagen
 import urllib.parse
 import tkinter as tk              # Das normale Tkinter (für Menüs)
@@ -254,35 +255,109 @@ def extract_cover_data(path):
         return data
     except: return None
 
+def _json_safe(value):
+    """Konvertiert numpy-Typen/ndarray in JSON-serialisierbare Python-Typen."""
+    import numpy as np
+    if isinstance(value, np.ndarray):
+        return [_json_safe(v) for v in value.tolist()]
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        return float(value)
+    if isinstance(value, (np.bool_,)):
+        return bool(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+def safe_playlist_name(playlist_name):
+    """Dateisystem-sicherer Playlist-Name (identisch für Export und Update)."""
+    safe_name = "".join([c for c in playlist_name if c.isalnum() or c in " _-"]).strip()
+    return safe_name or "Playlist"
+
+
+def _track_name(r):
+    return r.get('Dateiname') or os.path.basename(r.get('Pfad', '') or 'track')
+
+
+def _rekordbox_xml(clean_list, playlist_name):
+    root = ET.Element("DJ_PLAYLISTS", Version="1.0.0", Creator="@bagueDev")
+    col = ET.SubElement(root, "COLLECTION", Entries=str(len(clean_list)))
+    for i, r in enumerate(clean_list):
+        _camelot = r.get('Camelot', '-')
+        loc = "file://localhost" + urllib.parse.quote(os.path.abspath(r.get('Pfad', '')).replace("\\", "/"))
+        t = ET.SubElement(col, "TRACK", TrackID=str(i + 1), Name=str(_track_name(r)), Artist="DJ Import", Kind="Audio File", Size=str(r.get('Größe', 0)), TotalTime="300", Location=loc, AverageBpm=str(r.get('BPM', 0)))
+        if str(_camelot) != "-": t.set("Tonality", str(_camelot))
+    pl = ET.SubElement(root, "PLAYLISTS")
+    node = ET.SubElement(pl, "NODE", Type="FOLDER", Name="Imports", Count="1")
+    pl_n = ET.SubElement(node, "NODE", Name=playlist_name, Type="PLAYLIST", Entries=str(len(clean_list)))
+    for i in range(len(clean_list)): ET.SubElement(pl_n, "TRACK", Key=str(i + 1))
+    return minidom.parseString(ET.tostring(root)).toprettyxml(indent="  ")
+
+
+def _m3u_text(clean_list):
+    lines = ["#EXTM3U"]
+    for r in clean_list:
+        lines.append(f"#EXTINF:-1,{_track_name(r)}")
+        lines.append(str(r.get('Pfad', '')))
+    return "\n".join(lines) + "\n"
+
+
+def _playlist_text(ext, clean_list, playlist_name):
+    """Erzeugt den kompletten Dateiinhalt im Speicher (None = unbekanntes Format)."""
+    if ext == ".xml": return _rekordbox_xml(clean_list, playlist_name)
+    if ext in (".m3u", ".m3u8"): return _m3u_text(clean_list)
+    if ext == ".json": return json.dumps({"name": playlist_name, "dev": "@bagueDev", "tracks": clean_list}, indent=4)
+    return None
+
+
+def _write_atomic(path, text):
+    """Erst in Temp-Datei schreiben, dann ersetzen – die Zieldatei wird nie halb geschrieben."""
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f: f.write(text)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp): os.remove(tmp)
+
+
+EXPORT_EXTENSIONS = {"Rekordbox": ".xml", "M3U": ".m3u", "JSON": ".json"}
+
+
 def perform_export(track_list, export_folder, formats, playlist_name):
     created = []
-    safe_name = "".join([c for c in playlist_name if c.isalnum() or c in " _-"]).strip()
-    if not safe_name: safe_name = "Playlist"
+    safe_name = safe_playlist_name(playlist_name)
+    clean_list = [_json_safe(t) for t in track_list]
     try:
-        if "Rekordbox" in formats:
-            root = ET.Element("DJ_PLAYLISTS", Version="1.0.0", Creator="@bagueDev")
-            col = ET.SubElement(root, "COLLECTION", Entries=str(len(track_list)))
-            for i, r in enumerate(track_list):
-                loc = "file://localhost" + urllib.parse.quote(os.path.abspath(r['Pfad']).replace("\\","/"))
-                t = ET.SubElement(col, "TRACK", TrackID=str(i+1), Name=str(r['Dateiname']), Artist="DJ Import", Kind="Audio File", Size=str(r['Größe']), TotalTime="300", Location=loc, AverageBpm=str(r['BPM']))
-                if str(r['Camelot']) != "-": t.set("Tonality", str(r['Camelot']))
-            pl = ET.SubElement(root, "PLAYLISTS")
-            node = ET.SubElement(pl, "NODE", Type="FOLDER", Name="Imports", Count="1")
-            pl_n = ET.SubElement(node, "NODE", Name=playlist_name, Type="PLAYLIST", Entries=str(len(track_list)))
-            for i in range(len(track_list)): ET.SubElement(pl_n, "TRACK", Key=str(i+1))
-            with open(os.path.join(export_folder, f"{safe_name}.xml"), "w", encoding="utf-8") as f: f.write(minidom.parseString(ET.tostring(root)).toprettyxml(indent="  "))
-            created.append(f"{safe_name}.xml")
-        if "M3U" in formats:
-            with open(os.path.join(export_folder, f"{safe_name}.m3u"), "w", encoding="utf-8") as f:
-                f.write("#EXTM3U\n")
-                for r in track_list: f.write(f"#EXTINF:-1,{r['Dateiname']}\n{r['Pfad']}\n")
-            created.append(f"{safe_name}.m3u")
-        if "JSON" in formats:
-            data = {"name": playlist_name, "dev": "@bagueDev", "tracks": track_list}
-            with open(os.path.join(export_folder, f"{safe_name}.json"), "w", encoding="utf-8") as f: json.dump(data, f, indent=4)
-            created.append(f"{safe_name}.json")
+        for fmt, ext in EXPORT_EXTENSIONS.items():
+            if fmt not in formats: continue
+            _write_atomic(os.path.join(export_folder, f"{safe_name}{ext}"), _playlist_text(ext, clean_list, playlist_name))
+            created.append(f"{safe_name}{ext}")
         return f"✅ Export OK: {', '.join(created)}"
     except Exception as e: return f"❌ Fehler: {e}"
+
+
+def perform_update(track_list, file_path, backup=True):
+    """Überschreibt eine bestehende Playlist-Datei (Format aus Endung).
+
+    Der Inhalt wird komplett im Speicher erzeugt und atomar geschrieben; vorher
+    wird die alte Datei als <name>.bak gesichert.
+    """
+    ext = os.path.splitext(file_path)[1].lower()
+    base_name = os.path.splitext(os.path.basename(file_path))[0]
+    try:
+        text = _playlist_text(ext, [_json_safe(t) for t in track_list], base_name)
+        if text is None:
+            return f"❌ Unbekanntes Format: {ext}"
+        if backup and os.path.exists(file_path):
+            shutil.copy2(file_path, file_path + ".bak")
+        _write_atomic(file_path, text)
+        return f"✅ Updated: {os.path.basename(file_path)}"
+    except Exception as e:
+        return f"❌ Fehler: {e}"
 
 def export_chat_html(history, target_path):
     try:

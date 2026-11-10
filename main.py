@@ -36,7 +36,7 @@ from tabs.tab_transcribe import TranscribeTab
 from tabs.tab_chat import ChatTab
 from tabs.tab_log import LogTab
 
-from helpers import perform_export, ShortcutOverviewWindow
+from helpers import perform_export, perform_update, safe_playlist_name, EXPORT_EXTENSIONS, ShortcutOverviewWindow
 
 # Setup
 ctk.set_appearance_mode("Dark")
@@ -178,6 +178,7 @@ class DJApp(ctk.CTk):
         # --------------------------
 
         ctk.CTkButton(self.footer, text="💾 EXPORT", command=self.do_export_main, fg_color="green", width=100).pack(side="right", padx=10)
+        ctk.CTkButton(self.footer, text="🔄 UPDATE", command=self.do_update_main, fg_color="#007aff", width=100).pack(side="right", padx=5)
         
         self.playlist_name_entry = ctk.CTkEntry(self.footer, placeholder_text="Playlist Name...", width=150)
         self.playlist_name_entry.pack(side="right", padx=10)
@@ -277,6 +278,69 @@ class DJApp(ctk.CTk):
         msg = perform_export(track_list, target, formats, pl_name)
         self.log_tab.log(msg)
         messagebox.showinfo("Export", msg)
+        self.lift()
+        self.focus_force()
+
+        # Zuletzt exportierte Pfade merken (für Update-Button)
+        if msg.startswith("✅"):
+            safe_name = safe_playlist_name(pl_name)
+            self.analyze_tab.last_playlist_paths = [
+                os.path.join(target, f"{safe_name}{EXPORT_EXTENSIONS[fmt]}") for fmt in formats
+            ]
+
+    def do_update_main(self):
+        # 1. Daten prüfen
+        if not hasattr(self.analyze_tab, 'data_map') or not hasattr(self.analyze_tab, 'tree'):
+            return
+
+        ids = self.analyze_tab.tree.get_children()
+        if not ids:
+            messagebox.showwarning("Info", "No tracks in the list 🚫")
+            self.lift()
+            self.focus_force()
+            return
+
+        track_list = [self.analyze_tab.data_map[i] for i in ids if i in self.analyze_tab.data_map]
+
+        # 2. Pfad prüfen
+        paths = list(getattr(self.analyze_tab, 'last_playlist_paths', []))
+        if not paths:
+            messagebox.showwarning("Info", "Keine Playlist zum Aktualisieren.\nBitte zuerst importieren oder exportieren. 🚫")
+            self.lift()
+            self.focus_force()
+            return
+
+        msgs = []
+        existing = []
+        for p in paths:
+            if os.path.exists(p):
+                existing.append(p)
+            else:
+                msgs.append(f"❌ Datei nicht gefunden: {os.path.basename(p)}")
+
+        # 3. Rückfrage: Update überschreibt die Datei(en) komplett
+        if existing:
+            question = (
+                f"Diese Datei(en) werden komplett mit den {len(track_list)} Tracks der Liste überschrieben:\n\n"
+                + "\n".join(existing)
+                + "\n\nDie alte Version wird als .bak daneben gesichert."
+            )
+            if getattr(self.analyze_tab, 'filter_active', False):
+                question += "\n\n⚠️ Filter aktiv: Es werden nur die sichtbaren Tracks geschrieben!"
+            ok = messagebox.askyesno("Update", question + "\n\nFortfahren?", icon="warning")
+            self.lift()
+            self.focus_force()
+            if not ok:
+                return
+
+        # 4. Aktualisieren
+        for p in existing:
+            msg = perform_update(track_list, p)
+            msgs.append(msg)
+            self.log_tab.log(msg)
+
+        self.analyze_tab.last_playlist_paths = existing
+        messagebox.showinfo("Update", "\n".join(msgs))
         self.lift()
         self.focus_force()
 
@@ -632,7 +696,7 @@ class DJApp(ctk.CTk):
             if os.path.exists(license_path):
                 os.system(f'open "{license_path}"')
             else:
-                messagebox.showinfo("License", "LICENSE file not found.\\nSee https://www.gnu.org/licenses/gpl-3.0.html")
+                messagebox.showinfo("License", "LICENSE file not found.\nSee https://www.gnu.org/licenses/gpl-3.0.html")
         
         ctk.CTkButton(about, text="📜 View Full License (GPLv3)", width=200, command=open_license, fg_color="gray").pack(pady=5)
         

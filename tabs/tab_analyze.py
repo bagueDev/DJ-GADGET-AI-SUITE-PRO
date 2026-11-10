@@ -40,6 +40,9 @@ class AnalyzeTab(ctk.CTkFrame):
         # --- DATA STATE ---
         self.all_tracks = []
         self.data_map = {}
+        # Zuletzt importierte/exportierte Playlist-Pfade (für Update-Button)
+        self.last_playlist_paths = []
+        self.filter_active = False  # True, solange die Tabelle nur einen gefilterten Ausschnitt zeigt
         self.drag_item = None
         self.undo_stack = []
         
@@ -688,7 +691,10 @@ class AnalyzeTab(ctk.CTkFrame):
             return
         
         new_tracks = import_playlist_file(f)
-        
+
+        # Pfad der importierten Playlist merken (für Update-Button)
+        self.last_playlist_paths = [f]
+
         if not new_tracks:
             messagebox.showwarning("Info", "No tracks found 🚫")
             self.app.focus_force() # Falls not found, Fokus zurück
@@ -758,6 +764,7 @@ class AnalyzeTab(ctk.CTkFrame):
         self.tree.delete(*self.tree.get_children())
         self.data_map = {}
         self.all_tracks = []
+        self.filter_active = False
         self.app.log_tab.log("Playlist cleared 🗑️") 
 
     def apply_filter(self):
@@ -774,6 +781,7 @@ class AnalyzeTab(ctk.CTkFrame):
             
         k = self.f_key.get().lower().strip()
         n = self.f_name.get().lower().strip()   # <--- Name-Filter
+        self.filter_active = bool(k or n or (mi, ma) != (0, 999))
         
         # 2. Schleife durch alle Tracks
         for t in self.all_tracks:
@@ -802,7 +810,7 @@ class AnalyzeTab(ctk.CTkFrame):
     def reset_filter(self):
         self.f_name.delete(0, "end") # NEU
         self.f_bpm_min.delete(0,"end"); self.f_bpm_max.delete(0,"end"); self.f_key.delete(0,"end")
-        self.tree.delete(*self.tree.get_children()); self.data_map = {}; 
+        self.tree.delete(*self.tree.get_children()); self.data_map = {}; self.filter_active = False
         for t in self.all_tracks: self.ins(t)
         self.renum()
 

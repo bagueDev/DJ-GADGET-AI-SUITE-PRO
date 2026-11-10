@@ -122,6 +122,7 @@ def start_server(model_path, n_ctx, threads):
         "--threads", str(threads),
         "--port", str(port),
         "--host", "127.0.0.1",
+        "--cors-origins", f"http://127.0.0.1:{port},http://localhost:{port}",
         "--cache-type-k", "q4_0",
         "--cache-type-v", "q4_0",
         "--batch-size", "512",
