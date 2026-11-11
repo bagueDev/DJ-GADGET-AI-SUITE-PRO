@@ -384,7 +384,7 @@ class MelodyTab(ctk.CTkFrame):
         
         # --- SECTION 2: CONVERTER (Bleibt gleich) ---
         ctk.CTkFrame(self, height=2, fg_color="gray").pack(fill="x", pady=20)
-        ctk.CTkLabel(self, text="🔊 Audio to MIDI Converter", font=("Arial", 18, "bold")).pack(pady=5)
+        ctk.CTkLabel(self, text="🔊 Audio to MIDI Converter (experimental)", font=("Arial", 18, "bold")).pack(pady=5)
         
         mid_box = ctk.CTkFrame(self)
         mid_box.pack(pady=10, fill="x", padx=50)
@@ -427,6 +427,19 @@ class MelodyTab(ctk.CTkFrame):
         self.midi_conv_len.set("20s")
         self.midi_conv_len.pack(side="left", padx=5)
         
+        # Zweite Options-Zeile: Quelle & Raster
+        conv_opts2 = ctk.CTkFrame(self, fg_color="transparent")
+        conv_opts2.pack(pady=2)
+        # Full mix: für ganze Lieder – trennt vor der Erkennung Schlag- und Ton-Anteil.
+        # Bei trockenen Loops/Stems aus lassen (erzeugt dort Fehltreffer).
+        self.midi_full_mix = ctk.CTkCheckBox(conv_opts2, text="🎚 Full mix (whole song)")
+        self.midi_full_mix.pack(side="left", padx=10)
+        # Grid: Noten auf das 16tel-Raster ziehen (braucht ein stimmiges BPM)
+        self.midi_grid = ctk.CTkCheckBox(conv_opts2, text="🧲 Snap to 1/16 grid")
+        self.midi_grid.pack(side="left", padx=10)
+        ctk.CTkLabel(self, text="Rule-based detection, results vary. Best with a dry loop or a stem from Stems AI.",
+                     font=("Arial", 11), text_color="gray").pack()
+
         ctk.CTkButton(mid_box, text="⚡ CONVERT", command=self.convert_audio_midi, fg_color="#007aff").pack(side="right", padx=5)
         self.midi_conv_status = ctk.CTkLabel(self, text="Ready.", text_color="gray")
         self.midi_conv_status.pack()
@@ -894,17 +907,27 @@ class MelodyTab(ctk.CTkFrame):
             bpm = self._analyzer_bpm(fpath)
             if bpm: bpm_source = "analyzer"
 
-        self.midi_conv_status.configure(text="Analyze (may take a while)...", text_color="yellow")
         out_path = os.path.splitext(fpath)[0] + "_extracted.mid"
-        
-        threading.Thread(target=self._run_conv, args=(fpath, out_path, mode, duration, thresh, smooth, bpm, bpm_source)).start()
+        # Vorhandene Datei nicht stillschweigend überschreiben
+        if os.path.exists(out_path):
+            ok = messagebox.askyesno("Overwrite?", f"{os.path.basename(out_path)} already exists.\n\nOverwrite it?")
+            self.app.lift()
+            self.app.focus_force()
+            if not ok:
+                return
 
-    def _run_conv(self, f, o, m, d, t, s, bpm=None, bpm_source="detected"):
+        full_mix = bool(self.midi_full_mix.get())
+        grid = bool(self.midi_grid.get())
+        self.midi_conv_status.configure(text="Analyze (may take a while)...", text_color="yellow")
+        
+        threading.Thread(target=self._run_conv, args=(fpath, out_path, mode, duration, thresh, smooth, bpm, bpm_source, full_mix, grid)).start()
+
+    def _run_conv(self, f, o, m, d, t, s, bpm=None, bpm_source="detected", full_mix=False, grid=False):
         err = None
         used_bpm = None
         try:
             melody_generator.clear_last_error()
-            ok = melody_generator.audio_to_midi(f, o, m, d, t, s, bpm)
+            ok = melody_generator.audio_to_midi(f, o, m, d, t, s, bpm, separate=full_mix, quantize=grid)
             used_bpm = melody_generator.get_last_bpm()
             if not ok: err = melody_generator.get_last_error()
         except Exception as e:

@@ -117,19 +117,26 @@ Typische Anwendungen:
 
 Ändert sich eine Einstellung, die Noten beeinflusst (Skala, Key, Density, Bars, Progression, Arrangement), ändert sich auch das Ergebnis trotz gleichem Seed.
 
-### Audio to MIDI Converter
-- Sample laden (MP3/WAV/FLAC/AIFF)
-- Modi: 🎶 Melody (Tonhöhe) / 🥁 Drums (Kick/Snare/Hat)
-- Länge: 10/20/40 s oder Full
-- **Sens**-Regler filtert Geister-Noten.
-- **🧽 Smooth** (wirkt ab v3.3.1): glättet die erkannte Tonhöhe, verbindet zerhackte gehaltene Töne und verwirft sehr kurze Störnoten. Empfohlen für Gesang und Vibrato; bei schnellen Läufen lieber aus. Im Drums-Modus fasst es doppelt erkannte Schläge zusammen.
-- **🥁 BPM** (neu in v3.3.1): Tempo des Quell-Audios, damit die Noten in der DAW auf dem Raster liegen.
+### Audio to MIDI Converter (experimentell)
+Der Converter arbeitet mit festen Regeln, nicht mit einem trainierten KI-Modell. Er liefert einen brauchbaren Startpunkt, den du in der DAW nachbearbeitest, keine fertige Transkription.
+
+**Beste Quelle:** ein trockener Loop, eine einzelne Stimme oder ein Stem aus Stems AI (Drums-Stem für 🥁, Vocals-Stem für 🎶).
+
+- **Sample laden** (MP3/WAV/FLAC/AIFF), **Länge** 10/20/40 s oder Full.
+- **Modus 🥁 Drums:** sucht getrennt in Tiefen (Kick → C1), Mitten (Snare/Clap → D1) und Höhen (Hi-Hat → F#1). MIDI-Kanal 10, Velocity nach Schlagstärke.
+- **Modus 🎶 Melody:** erkennt eine einstimmige Tonhöhe. Akkorde und mehrere Stimmen gleichzeitig gehen nicht.
+- **Sens:** höher = mehr Noten, aber auch mehr Fehltreffer.
+- **🧽 Smooth:** für Gesang und Vibrato. Glättet die Tonhöhe, verbindet zerhackte gehaltene Töne, verwirft Störnoten. Ohne Smooth werden wiederholte gleiche Töne an jedem neuen Anschlag getrennt (gut für Synths, Klavier, Bass).
+- **🥁 BPM:** Tempo des Quell-Audios.
   - Datei per 📂 gewählt und im Analyzer gescannt → das BPM wird automatisch eingetragen.
-  - Feld leer → das Tempo wird aus dem Audio geschätzt. Die Schätzung ist nur ungefähr (im Test 172,3 statt 174); für exaktes Raster das BPM aus dem Analyzer eintragen.
-  - Eigener Wert (20–300) hat immer Vorrang, z. B. bei Halftime-Fehlern.
-  - Das verwendete Tempo steht danach in Status, Log und Dialog (`manual` / `analyzer` / `detected`).
-- Takt 1 der MIDI-Datei ist der Anfang der Audiodatei. Beginnt dein Sample nicht auf einer Eins, den Clip in der DAW verschieben.
-- Die Datei landet als `<name>_extracted.mid` neben dem Original und überschreibt eine vorhandene gleichnamige Datei ohne Rückfrage.
+  - Feld leer → das Tempo wird geschätzt. Bei schnellen Stilen kommt dabei oft das halbe Tempo heraus (87 statt 174); dann den richtigen Wert eintragen.
+  - Eigener Wert (20–300) hat immer Vorrang. Das verwendete Tempo steht danach in Status, Log und Dialog.
+- **🧲 Snap to 1/16 grid:** zieht alle Noten aufs 16tel-Raster und legt den Clip-Anfang auf einen Beat. Braucht ein stimmiges BPM; am besten das aus dem Analyzer. Für freies Timing (Gesang, Rubato) aus lassen.
+- **🎚 Full mix (whole song):** für komplette Lieder. Trennt vor der Erkennung Schlagzeug und Töne. **Bei trockenen Loops und Stems aus lassen**, dort erzeugt es zusätzliche Fehltreffer. Rechnet bei langen Dateien einige Sekunden länger.
+
+**Was du erwarten kannst (Drums):** Kicks werden bei trockenen Loops meist vollständig gefunden. Ein Clap oder eine Snare genau auf einer Kick wird oft nur als Kick erkannt, leise Zwischen-Hats fehlen meist. In einem ganzen Lied können Bass-Einsätze als Kick und Gesang als Snare auftauchen.
+
+**Ausgabe:** `<name>_extracted.mid` neben dem Original; vor dem Überschreiben fragt die App nach. Ohne Grid ist Takt 1 der Anfang der Audiodatei.
 
 ## 8. Transcriber 📝
 

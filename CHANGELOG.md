@@ -48,6 +48,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔊 Audio → MIDI (🎹)
 - **Tempo nicht mehr fest 120 BPM** – neues BPM-Feld im Converter: eigener Wert → BPM aus dem Analyzer (wenn der Track dort gescannt ist) → automatische Erkennung. Die Noten liegen damit im DAW auf dem Raster des Tracks; das verwendete Tempo steht in Status, Log und Dialog.
 - **🧽 Smooth funktioniert jetzt** – die Checkbox hatte bisher keine Wirkung. Melody: Medianfilter (~115 ms), gleiche Noten mit < 60 ms Pause werden verbunden, Noten < 90 ms verworfen. Drums: Doppelschläge < 60 ms werden zusammengefasst.
+- **Drums-Modus neu: Erkennung pro Frequenzbereich** – bisher entschied eine einzige Helligkeits-Schwelle (1800 Hz) über den ganzen Mix, sodass fast alles auf einer Note landete (dunkles Material: nur Kicks, helles: nur Snares; Hi-Hats gab es gar nicht). Jetzt wird in Tiefen (Kick), Mitten (Snare/Clap) und Höhen (Hi-Hat) getrennt nach Schlägen gesucht, gleichzeitige Schläge sind möglich. Auf 8 Test-Loops mit bekannter Lösung: Kicks 9 % → 90 % gefunden bei 0 Fehltreffern, falsche Snare-Noten 104 → 17, Hi-Hats 0 % → 56 %.
+- **Drums-Modus: Timing und Dynamik** – Schläge wurden ~1 Frame vor dem Schlag gemessen und bei dichten Folgen nach hinten geschoben; jetzt absolute Zeiten (mittlere Abweichung ~5 ms), Velocity nach Schlagstärke, Ausgabe auf MIDI-Kanal 10, Schlag am Dateianfang wird erkannt.
+- **Als „experimental" gekennzeichnet** – regelbasierte Erkennung ohne trainiertes Modell; Hinweis im Tab, dass ein trockener Loop oder ein Stem aus Stems AI die beste Quelle ist.
+- **🧲 Snap to 1/16 grid** – zieht die Noten aufs Raster und legt den Clip-Anfang auf einen Beat (unter 100 BPM 32tel, damit Halftime-Erkennung die echten 16tel nicht verliert). Mit bekanntem BPM lagen in 6 von 8 Test-Loops alle erkannten Kicks exakt auf der richtigen Position.
+- **🎚 Full mix (whole song)** – trennt vor der Erkennung Schlag- und Ton-Anteil (HPSS). Bei kompletten Mixen deutlich besser (House: 17/31 Kicks mit 21 falschen → 31/31 mit 2 falschen), bei trockenen Loops schlechter (0 → 40 falsche Kicks), deshalb als Schalter und standardmäßig aus.
+- **Automatisches BPM nachgeschärft** – das grob erkannte Tempo wird an den gefundenen Einsätzen ausgerichtet (Klicktrack 174: 172,27 → 174,07) und gegen typische Verwechslungen (×1,5, ×4/3) geprüft. Halbes/doppeltes Tempo bleibt mehrdeutig.
+- **Melody: wiederholte gleiche Töne** werden an deutlichen neuen Anschlägen getrennt (Test: 37 → 40 von 40 Tönen), solange Smooth aus ist.
+- **Rückfrage vor dem Überschreiben** einer vorhandenen `<name>_extracted.mid`.
 - **Letzter Ton ging verloren**, wenn das Audio mitten im Ton endet – behoben.
 - „No notes detected" und andere Converter-Fehler erscheinen jetzt im Log-Tab.
 

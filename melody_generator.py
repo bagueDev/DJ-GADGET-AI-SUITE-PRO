@@ -1655,10 +1655,18 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
 # ==========================================
 # TEIL 3: AUDIO TO MIDI (Converter)
 # ==========================================
-def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smooth, bpm=None):
-    """bpm=None/0 -> Tempo wird aus dem Audio erkannt. Das Tempo landet in der
-    MIDI-Datei und bestimmt die Umrechnung Sekunden -> Beats, damit die Noten
-    im DAW auf dem Raster des Tracks liegen."""
+def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smooth, bpm=None,
+                  separate=False, quantize=False):
+    """Experimentelle Audio->MIDI-Erkennung (regelbasiert, kein trainiertes Modell).
+
+    bpm=None/0 -> Tempo wird aus dem Audio erkannt und an den gefundenen Einsätzen
+                  nachgeschärft. Das Tempo landet in der MIDI-Datei und bestimmt die
+                  Umrechnung Sekunden -> Beats.
+    separate   -> für komplette Mixe: Drums-Modus analysiert nur den Schlag-Anteil,
+                  Melody-Modus nur den Ton-Anteil. Bei trockenen Loops/Stems aus lassen
+                  (erzeugt dort Fehltreffer).
+    quantize   -> Noten auf das 16tel-Raster ziehen; der Clip beginnt auf einem Beat.
+    """
     try:
         _tls.bpm = None
         print(f"Converting: {os.path.basename(audio_path)}...")
@@ -1674,7 +1682,8 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
         track = MidiTrack()
         mid.tracks.append(track)
 
-        if not bpm or bpm <= 0:
+        bpm_auto = not bpm or bpm <= 0
+        if bpm_auto:
             try:
                 detected, _ = librosa.beat.beat_track(y=y, sr=sr)
                 bpm = float(np.atleast_1d(detected)[0])
@@ -1682,19 +1691,17 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
                 print(f"⚠️ BPM detection failed ({e}), using 120.")
                 bpm = 0
             if not (20 <= bpm <= 300): bpm = 120.0
-        bpm = round(float(bpm), 2)
-        _tls.bpm = bpm
-        print(f"Tempo: {bpm} BPM")
-        track.append(MetaMessage('set_tempo', tempo=int(round(60_000_000 / bpm))))
 
-        ticks_per_sec = (bpm / 60.0) * mid.ticks_per_beat
-        events = []
+        events = []  # (Start s, Ende s, Note, Velocity)
+        is_drum_mode = False
 
         # --- A. MELODY (Pitch - PYIN) ---
         if "melody" in str(mode).lower():
             fmin = librosa.note_to_hz('C2')
             fmax = librosa.note_to_hz('C6')
-            f0, voiced_flag, voiced_probs = librosa.pyin(y, fmin=fmin, fmax=fmax, sr=sr)
+            # Nur den "Ton"-Anteil analysieren: Schlagzeug stört die Tonhöhen-Erkennung
+            y_mel = librosa.effects.harmonic(y) if separate else y
+            f0, voiced_flag, voiced_probs = librosa.pyin(y_mel, fmin=fmin, fmax=fmax, sr=sr)
             midi_notes = librosa.hz_to_midi(f0)
             times = librosa.times_like(f0, sr=sr)
             
@@ -1714,71 +1721,138 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
 
             # Frames zu Noten zusammenfassen
             hop = float(times[1] - times[0]) if len(times) > 1 else 0.023
-            raw = []
-            current_note, start_time = -1, 0.0
+            # Neue Anschläge: trennt wiederholte gleiche Töne, die sonst zu EINER langen Note verschmelzen.
+            # Nicht bei Smooth – dort sollen kurze Aussetzer (Gesang) gerade verbunden werden.
+            attack_frames = set()
+            if not smooth:
+                att_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=512)
+                att = librosa.onset.onset_detect(onset_envelope=att_env, sr=sr, hop_length=512,
+                                                 backtrack=False, delta=0.1, units='frames')
+                # Nur deutliche Anschläge (absolute Schwelle): librosa normiert die Kurve, sodass
+                # sonst auch ein Dauerton oder Vibrato in viele "Anschläge" zerfällt.
+                attack_frames = set(int(f) for f in att if att_env[f] >= 2.0)
+
+            raw = []  # [Start, Ende, Note, beginnt_mit_Anschlag]
+            current_note, start_time, by_attack = -1, 0.0, False
             for i, n in enumerate(frame_notes):
-                if n != current_note:
-                    if current_note >= 0: raw.append([start_time, times[i], current_note])
-                    current_note, start_time = n, times[i]
+                new_attack = (n == current_note and n >= 0 and i in attack_frames
+                              and (times[i] - start_time) >= 0.09)
+                if n != current_note or new_attack:
+                    if current_note >= 0: raw.append([start_time, times[i], current_note, by_attack])
+                    current_note, start_time, by_attack = n, times[i], new_attack
             if current_note >= 0 and len(times):
-                raw.append([start_time, times[-1] + hop, current_note])  # Ton klingt bis zum Dateiende
+                raw.append([start_time, times[-1] + hop, current_note, by_attack])  # Ton klingt bis zum Dateiende
 
             if smooth:
                 # Gleiche Note nach winziger Pause (< 60 ms) = ein gehaltener Ton
+                # (außer die zweite beginnt mit einem echten Anschlag)
                 merged = []
                 for ev in raw:
-                    if merged and merged[-1][2] == ev[2] and (ev[0] - merged[-1][1]) < 0.06:
+                    if merged and merged[-1][2] == ev[2] and (ev[0] - merged[-1][1]) < 0.06 and not ev[3]:
                         merged[-1][1] = ev[1]
                     else:
                         merged.append(ev)
                 raw = merged
 
-            events = [(st, en, n) for st, en, n in raw if (en - st) > min_len]
+            events = [(st, en, n, 100) for st, en, n, _ in raw if (en - st) > min_len]
 
-        # --- B. DRUMS (Smart Onset + Frequency) ---
+        # --- B. DRUMS (getrennte Schlag-Erkennung pro Frequenzbereich) ---
         else:
-            # 1. Onset Detection (Rhythmus)
-            # Wir nutzen 'delta' basierend auf Sensitivity, um mehr Schläge zu finden.
-            # Sensitivity 0.1 -> Delta 0.25 (Streng)
-            # Sensitivity 0.5 -> Delta 0.05 (Sehr empfindlich)
+            # Statt EINER Helligkeits-Schwelle für den ganzen Mix wird in drei
+            # Frequenzbereichen getrennt nach Schlägen gesucht. So können Kick und
+            # Hi-Hat gleichzeitig erkannt werden, und dunkles oder helles Material
+            # kippt nicht mehr komplett auf eine Note.
+            is_drum_mode = True
+            hop = 256  # ~12 ms Zeitauflösung
+            D = librosa.stft(y, n_fft=1024, hop_length=hop)
+            if separate:
+                # Nur den "Schlag"-Anteil analysieren: gehaltene Töne (Bass, Flächen, Gesang)
+                # sollen nicht als Kick oder Snare zählen
+                _, D = librosa.decompose.hpss(D)
+            S = np.abs(D) ** 2
+            freqs = librosa.fft_frequencies(sr=sr, n_fft=1024)
+            S_db = librosa.power_to_db(S, ref=np.max, top_db=60)
+            # Ein paar stille Frames voranstellen, damit auch ein Schlag ganz am
+            # Dateianfang als Anstieg erkannt wird (wird unten wieder abgezogen).
+            lead = 4
+            S_db = np.pad(S_db, ((0, 0), (lead, 0)), constant_values=float(S_db.min()))
+
+            KICK_N, SNARE_N, HAT_N = 36, 38, 42
+            KICK_RATIO = 0.8   # Tiefen müssen mind. 80 % so stark ansteigen wie die Mitten
+            bands = {KICK_N: (40, 130), SNARE_N: (800, 3500), HAT_N: (6000, 11000)}
+
+            # Sensitivity 0.1 -> Delta 0.25 (streng) ... 0.5 -> 0.05 (sehr empfindlich)
             delta_val = max(0.05, 0.3 - (sensitivity * 0.5))
-            
-            onset_frames = librosa.onset.onset_detect(
-                y=y, sr=sr, 
-                backtrack=True, 
-                units='frames', 
-                delta=delta_val
-            )
-            
-            # 2. Frequenz-Analyse (Kick vs. Snare Unterscheidung)
-            # Wir berechnen den "Spectral Centroid" (Helligkeit) für den ganzen Song
-            spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
-            times = librosa.frames_to_time(onset_frames, sr=sr)
-            
-            last_hit = -1.0
-            for i, frame in enumerate(onset_frames):
-                t = times[i]
-                # Smooth: doppelt erkannte Schläge (< 60 ms Abstand) zusammenfassen
-                if smooth and (t - last_hit) < 0.06:
+            wait = max(1, int(0.03 * sr / hop))        # mind. 30 ms zwischen zwei Schlägen pro Instrument
+            tol = max(1, int(0.025 * sr / hop))        # "gleichzeitig" = innerhalb 25 ms
+
+            GATE_DB = 18.0     # ein Schlag muss bis auf 18 dB an den lautesten seines Bereichs herankommen
+            envs, peaks, levels = {}, {}, {}
+            for note, (lo, hi) in bands.items():
+                band = S_db[(freqs >= lo) & (freqs < hi)]
+                levels[note] = band.max(axis=0) if band.size else np.zeros(S_db.shape[1])
+                # center=False: sonst verschiebt librosa die Kurve um ~46 ms nach hinten
+                env = librosa.onset.onset_strength(S=band, sr=sr, hop_length=hop, aggregate=np.mean, center=False)
+                envs[note] = env
+                peaks[note] = float(env.max()) if len(env) else 0.0
+            top = max(peaks.values()) if peaks else 0.0
+
+            hits = {n: [] for n in bands}  # Note -> [(Frame, Stärke 0..1)]
+            for note, env in envs.items():
+                # Bereich ohne echte Schläge (nur Übersprechen/Rauschen) auslassen
+                if top <= 0 or peaks[note] < 0.2 * top:
                     continue
-                last_hit = t
-                
-                # Wir schauen uns die Helligkeit an diesem Zeitpunkt an
-                # (Sicherheitscheck, falls Frame out of bounds)
-                if frame < len(spectral_centroids):
-                    brightness = spectral_centroids[frame]
-                else:
-                    brightness = 0
-                
-                # ENTSCHEIDUNG: Kick oder Snare?
-                # Tiefe Frequenz (< 1500 Hz) -> Kick (C1 / 36)
-                # Hohe Frequenz (> 1500 Hz) -> Snare (D1 / 38)
-                if brightness < 1800:
-                    note = 36 # Kick
-                else:
-                    note = 38 # Snare
-                
-                events.append((t, t + 0.1, note))
+                frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr, hop_length=hop,
+                                                    delta=delta_val, wait=wait, backtrack=False, units='frames')
+                # Lautstärke-Prüfung: ein Schlag muss in seinem Bereich auch wirklich laut werden
+                # (nicht nur relativ zu vorheriger Stille ansteigen)
+                lvl = levels[note]
+                floor = float(lvl.max()) - GATE_DB
+                hits[note] = [(int(f), float(env[f] / peaks[note])) for f in frames
+                              if float(lvl[int(f):int(f) + 4].max()) >= floor]
+
+            def _near(frame, others):
+                return any(abs(frame - f) <= tol for f, _ in others)
+
+            def _val(env, frame):
+                return float(env[max(0, frame - tol):frame + tol + 1].max())
+
+            # Übersprechen aufräumen (Werte = Anstieg in dB, zwischen den Bereichen vergleichbar):
+            # - Der Anschlag-Klick einer Kick liegt auch in den Mitten. Als Snare/Clap zählt ein
+            #   Schlag auf einer Kick nur, wenn die Mitten deutlich über dem üblichen Kick-Klick liegen.
+            # - Eine Hi-Hat reicht nach unten in die Mitten, ist dort aber viel schwächer als in den Höhen.
+            # - Das Rauschen einer Snare reicht bis in die Höhen -> dort keine zusätzliche Hat.
+            l_env, m_env, h_env = envs[KICK_N], envs[SNARE_N], envs[HAT_N]
+            # - Der Knall einer Snare streut auch in die Tiefen. Eine Kick ist es nur, wenn die
+            #   Tiefen dort mindestens so stark ansteigen wie die Mitten.
+            kick_hits = [(f, st) for f, st in hits[KICK_N] if _val(l_env, f) >= KICK_RATIO * _val(m_env, f)]
+            hits[KICK_N] = kick_hits
+            click = float(np.percentile([_val(m_env, f) for f, _ in kick_hits], 30)) if kick_hits else 0.0
+            snares, on_kick = [], []
+            for f, st in hits[SNARE_N]:
+                m, h = _val(m_env, f), _val(h_env, f)
+                if _near(f, kick_hits):
+                    on_kick.append((f, st))
+                    if m < 1.4 * click:
+                        continue  # nur der Klick der Kick
+                elif m < 0.6 * h:
+                    continue      # Hi-Hat, keine Snare
+                snares.append((f, st))
+            if not snares:
+                # Liegt jede Snare auf einer Kick, gibt es keinen "reinen" Kick-Klick zum Vergleich
+                snares = [(f, st) for f, st in on_kick if st >= 0.5]
+            hats = [(f, st) for f, st in hits[HAT_N] if not _near(f, snares)]
+            hits[SNARE_N], hits[HAT_N] = snares, hats
+
+            min_gap = 0.06 if smooth else 0.0  # Smooth: Doppelschläge pro Instrument zusammenfassen
+            for note, lst in hits.items():
+                last_t = -1.0
+                for f, st in lst:
+                    t = float(librosa.frames_to_time(max(0, f - lead), sr=sr, hop_length=hop))
+                    if (t - last_t) < min_gap:
+                        continue
+                    last_t = t
+                    events.append((t, t + 0.05, note, int(55 + 70 * min(1.0, st))))
 
         # 3. Schreiben
         if not events:
@@ -1786,19 +1860,83 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
             print(f"❌ {_tls.error}")
             return False
 
-        events.sort(key=lambda x: x[0])
-        last_time_ticks = 0
-        
-        for start, end, note in events:
-            start_ticks = int(start * ticks_per_sec)
-            delta_on = max(0, start_ticks - last_time_ticks)
-            track.append(Message('note_on', note=note, velocity=100, time=delta_on))
-            
-            end_ticks = int(end * ticks_per_sec)
-            duration_ticks = max(20, end_ticks - start_ticks)
-            track.append(Message('note_off', note=note, velocity=0, time=duration_ticks))
-            
-            last_time_ticks = start_ticks + duration_ticks
+        # --- TEMPO: automatisch erkanntes BPM an den Einsätzen nachschärfen ---
+        # Gesucht wird im Bereich ±4 % das Tempo, bei dem die Einsätze am besten auf ein
+        # 16tel-Raster fallen (die Grob-Erkennung liegt oft 1 % daneben).
+        def _grid_fit(tempo, t, wgt):
+            g = 60.0 / tempo / 4.0
+            z = np.sum(wgt * np.exp(2j * np.pi * t / g))
+            return abs(z) / max(1e-9, float(np.sum(wgt))), float(np.angle(z) / (2 * np.pi) * g)
+
+        ev_t = np.array([e[0] for e in events], dtype=float)
+        ev_w = np.array([e[3] * (2.0 if (is_drum_mode and e[2] == 36) else 1.0) for e in events], dtype=float)
+        if bpm_auto and len(events) >= 8:
+            # Neben dem Grobwert auch typische Verwechslungen prüfen (z.B. 93 statt 140).
+            # Eine Alternative gewinnt nur, wenn sie deutlich besser aufs Raster passt.
+            # (Halbes/doppeltes Tempo lässt sich so NICHT unterscheiden – beide passen gleich gut.)
+            coarse, best_fit, ref_fit = bpm, -1.0, 0.0
+            for ratio in (1.0, 1.5, 4.0 / 3.0, 2.0 / 3.0, 0.75):
+                base = coarse * ratio
+                if not (60 <= base <= 200):
+                    continue
+                cands = base * (1.0 + np.linspace(-0.04, 0.04, 161))
+                # auch das doppelte Tempo werten: bei Halftime-Erkennung liegen die echten 16tel dazwischen
+                fits = [max(_grid_fit(c, ev_t, ev_w)[0], _grid_fit(2 * c, ev_t, ev_w)[0]) for c in cands]
+                top_i = int(np.argmax(fits))
+                if ratio == 1.0:
+                    ref_fit = fits[top_i]
+                if fits[top_i] > best_fit and (ratio == 1.0 or fits[top_i] > ref_fit + 0.15):
+                    best_fit, bpm = fits[top_i], float(cands[top_i])
+        bpm = round(float(bpm), 2)
+        _tls.bpm = bpm
+        print(f"Tempo: {bpm} BPM")
+        track.append(MetaMessage('set_tempo', tempo=int(round(60_000_000 / bpm))))
+        ticks_per_sec = (bpm / 60.0) * mid.ticks_per_beat
+
+        # --- RASTER: Noten auf 16tel ziehen, Clip-Anfang auf einen Beat legen ---
+        if quantize:
+            # Unter 100 BPM auf 32tel rastern: ist das Tempo nur halb so schnell erkannt
+            # (87 statt 174), bleiben die echten 16tel so trotzdem erhalten.
+            per_beat = 8 if bpm < 100 else 4
+            grid = 60.0 / bpm / per_beat
+            z = np.sum(ev_w * np.exp(2j * np.pi * ev_t / grid))
+            phase = float(np.angle(z) / (2 * np.pi) * grid)  # Versatz des Rasters gegenüber dem Dateianfang
+            steps = np.round((ev_t - phase) / grid).astype(int)
+            # Welche Rasterposition ist der Beat? Die mit den meisten/lautesten Einsätzen.
+            beat_pos = int(np.argmax([ev_w[(steps % per_beat) == k].sum() for k in range(per_beat)]))
+            steps -= beat_pos
+            if steps.min() < 0:
+                steps += per_beat * int(np.ceil(-steps.min() / float(per_beat)))  # um ganze Beats nach hinten
+            best = {}
+            for (st_s, en_s, note, vel), step in zip(events, steps):
+                length = 1 if is_drum_mode else max(1, int(round((en_s - st_s) / grid)))
+                key = (int(step), note)
+                if key not in best or vel > best[key][3]:      # doppelte Treffer auf einem Schritt: der lautere bleibt
+                    best[key] = (step * grid, (step + length) * grid - (grid * 0.5 if is_drum_mode else 0.0), note, vel)
+            events = sorted(best.values(), key=lambda e: e[0])
+            if not is_drum_mode:
+                # Einstimmig: keine Note darf in die nächste hineinragen
+                events = [(st_s, min(en_s, events[i + 1][0]) if i + 1 < len(events) else en_s, note, vel)
+                          for i, (st_s, en_s, note, vel) in enumerate(events)]
+                events = [e for e in events if e[1] > e[0]]
+
+        # Alle Note-On/Off mit absoluter Zeit sammeln und dann sortiert schreiben.
+        # (Vorher wurde ein Schlag nach hinten geschoben, wenn der vorige noch "klang" –
+        # bei dichten Hats oder gleichzeitigen Schlägen stimmte das Timing nicht.)
+        channel = 9 if is_drum_mode else 0  # Kanal 10 = Drums (General MIDI)
+        raw_msgs = []
+        for start, end, note, vel in events:
+            start_ticks = int(round(start * ticks_per_sec))
+            end_ticks = max(start_ticks + 20, int(round(end * ticks_per_sec)))
+            raw_msgs.append((start_ticks, 1, note, vel))
+            raw_msgs.append((end_ticks, 0, note, 0))
+        raw_msgs.sort(key=lambda m: (m[0], m[1]))  # bei gleicher Zeit erst Off, dann On
+
+        last_ticks = 0
+        for ticks, is_on, note, vel in raw_msgs:
+            track.append(Message('note_on' if is_on else 'note_off', note=note, velocity=vel,
+                                 time=ticks - last_ticks, channel=channel))
+            last_ticks = ticks
 
         mid.save(output_midi_path)
         print(f"✅ MIDI saved: {output_midi_path}")
