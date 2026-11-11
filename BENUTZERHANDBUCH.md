@@ -30,7 +30,8 @@ Die App ist portabel — lege sie mit diesen Ordnern zusammen ab (fehlende Ordne
 
 ### Erster Start auf macOS
 - Ordner auf die Festplatte (oder USB-Stick, inkl. Modell-Ordner) kopieren.
-- Rechtsklick auf die App → „Öffnen" → bestätigen (Gatekeeper, nur einmal).
+- macOS blockiert die App beim ersten Start, weil sie nicht von Apple beglaubigt ist: einmal versuchen zu öffnen, dann unter **Systemeinstellungen → Datenschutz & Sicherheit** auf **„Dennoch öffnen"** klicken (nur einmal nötig). Auf älteren macOS-Versionen geht auch Rechtsklick → „Öffnen".
+- Der fertige Download ist für Macs mit Apple Silicon (M1 oder neuer). Auf Intel-Macs läuft die App aus dem Quellcode; ein eigener Intel-Build ist geplant.
 - Der erste Start kann 10–20 Sekunden dauern (KI-Engines werden geprüft).
 - Oben im Header die Schriftgröße (12–20) anpassen.
 

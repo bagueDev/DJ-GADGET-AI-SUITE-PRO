@@ -9,7 +9,7 @@ Bibliothek, Sampler, Stem-Trennung, Transkription, Melodie- & MIDI-Generator und
 
 ![Platform](https://img.shields.io/badge/macOS-12%2B-000000?style=for-the-badge&logo=apple)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-MLX%20%2B%20Metal-blue?style=for-the-badge)
-![Intel](https://img.shields.io/badge/Intel-unterstützt-lightgrey?style=for-the-badge)
+![Intel](https://img.shields.io/badge/Intel-aus%20Quellcode-lightgrey?style=for-the-badge)
 ![Version](https://img.shields.io/badge/Version-3.3.1-orange?style=for-the-badge)
 ![License](https://img.shields.io/badge/Lizenz-GPLv3-blue?style=for-the-badge)
 ![Local](https://img.shields.io/badge/läuft-100%25%20lokal-success?style=for-the-badge&logo=shield)
@@ -112,14 +112,14 @@ Playlists als **Rekordbox XML**, **M3U** (Traktor / Serato / VLC) oder **JSON**.
 
 - **macOS 12 (Monterey)** oder neuer
 - **Apple Silicon (M1–M4):** MLX-Backend für Stems, Metal für den Chat
-- **Intel-Macs:** unterstützt (CPU/Torch-Pfad, Stems brauchen länger)
+- **Intel-Macs:** aus dem Quellcode startbar (CPU/Torch-Pfad, Stems brauchen länger). Der Download ist vorerst nur für Apple Silicon; ein Intel-Build ist geplant.
 - **RAM:** mindestens 8 GB, empfohlen 16 GB+
-- **Speicher:** ca. 1,3 GB App, dazu die KI-Modelle, die du lädst
+- **Speicher:** ca. 750 MB App (rund 320 MB Download), dazu die KI-Modelle, die du lädst
 - Windows & Linux: geplant, noch nicht verfügbar
 
 ## 🚀 Installation
 
-1. Neuesten Build unter **[Releases](../../releases)** herunterladen.
+1. Neuesten Build unter **[Releases](../../releases)** herunterladen. Die DMG ist für Macs mit **Apple Silicon** (M1 oder neuer); auf Intel-Macs startet sie nicht.
 2. App neben den Modell-Ordnern ablegen (fehlende Ordner werden automatisch erstellt):
    ```
    DJ Gadget AI-Suite Pro.app
@@ -128,7 +128,7 @@ Playlists als **Rekordbox XML**, **M3U** (Traktor / Serato / VLC) oder **JSON**.
    Whisper_Models/   ← Transkriptions-Modelle
    Chat_History/     ← gespeicherte Chats
    ```
-3. Erster Start: **Rechtsklick → Öffnen** und bestätigen (Gatekeeper, nur einmal). Der Start kann 10–20 s dauern, weil die Engines geprüft werden.
+3. Erster Start: macOS blockiert die App, weil sie nicht von Apple beglaubigt ist. Einmal versuchen zu öffnen, dann unter **Systemeinstellungen → Datenschutz & Sicherheit** auf **Dennoch öffnen** klicken (nur einmal nötig). Auf älteren macOS-Versionen geht auch **Rechtsklick → Öffnen**. Der Start kann 10–20 s dauern, weil die Engines geprüft werden.
 
 Es sind keine KI-Modelle enthalten. Die App ist portabel und läuft auch vom USB-Stick.
 

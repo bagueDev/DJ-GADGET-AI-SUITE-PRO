@@ -9,7 +9,7 @@ Library, sampler, stem separation, transcription, melody & MIDI generator and a 
 
 ![Platform](https://img.shields.io/badge/macOS-12%2B-000000?style=for-the-badge&logo=apple)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-MLX%20%2B%20Metal-blue?style=for-the-badge)
-![Intel](https://img.shields.io/badge/Intel-supported-lightgrey?style=for-the-badge)
+![Intel](https://img.shields.io/badge/Intel-from%20source-lightgrey?style=for-the-badge)
 ![Version](https://img.shields.io/badge/version-3.3.1-orange?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-GPLv3-blue?style=for-the-badge)
 ![Local](https://img.shields.io/badge/runs-100%25%20local-success?style=for-the-badge&logo=shield)
@@ -112,14 +112,14 @@ Playlists as **Rekordbox XML**, **M3U** (Traktor / Serato / VLC) or **JSON**.
 
 - **macOS 12 (Monterey)** or newer
 - **Apple Silicon (M1–M4):** MLX backend for stems, Metal for chat
-- **Intel Macs:** supported (CPU/Torch path, plan more time for stems)
+- **Intel Macs:** run from source (CPU/Torch path, plan more time for stems). The download is Apple Silicon only for now; an Intel build is planned.
 - **RAM:** 8 GB minimum, 16 GB+ recommended
-- **Disk:** ~1.3 GB app, plus the AI models you download
+- **Disk:** ~750 MB app (about 320 MB download), plus the AI models you download
 - Windows & Linux: planned, not available yet
 
 ## 🚀 Install
 
-1. Download the latest build from **[Releases](../../releases)**.
+1. Download the latest build from **[Releases](../../releases)**. The DMG is for **Apple Silicon** Macs (M1 or newer); it does not start on Intel Macs.
 2. Keep the app next to its model folders (missing folders are created automatically):
    ```
    DJ Gadget AI-Suite Pro.app
@@ -128,7 +128,7 @@ Playlists as **Rekordbox XML**, **M3U** (Traktor / Serato / VLC) or **JSON**.
    Whisper_Models/   ← transcription models
    Chat_History/     ← saved chats
    ```
-3. First launch: **right-click → Open** and confirm (Gatekeeper, only once). Startup can take 10–20 s while the engines are checked.
+3. First launch: macOS blocks the app because it is not notarized by Apple. Try to open it once, then go to **System Settings → Privacy & Security** and click **Open Anyway** (only needed once). On older macOS versions **right-click → Open** also works. Startup can take 10–20 s while the engines are checked.
 
 No AI models are included. The app is portable and also runs from a USB stick.
 
