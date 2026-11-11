@@ -10,8 +10,13 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 # Erst danach:
 import json
 import multiprocessing
+import queue
+import shlex
+import signal
 import socket
 import subprocess
+import tempfile
+import threading
 import time
 import urllib.request
 import urllib.error
@@ -99,9 +104,11 @@ def http_json(method, url, payload=None, timeout=10):
         return r.status, r.read()
 
 
-def wait_ready(port, timeout=180):
+def wait_ready(port, timeout=180, proc=None):
     start = time.time()
     while time.time() - start < timeout:
+        if proc is not None and proc.poll() is not None:
+            return False  # Server hat sich beendet (falsches Flag, Modell nicht ladbar ...)
         try:
             if http_json("GET", f"http://127.0.0.1:{port}/health", timeout=2)[0] == 200:
                 return True
@@ -111,7 +118,22 @@ def wait_ready(port, timeout=180):
     return False
 
 
-def start_server(model_path, n_ctx, threads):
+# Der gerade laufende Server. Wird direkt nach dem Start gesetzt, damit er auch dann
+# beendet wird, wenn der Worker mitten im Modell-Laden gestoppt wird.
+_ACTIVE = {"proc": None, "port": None}
+
+
+def _log_tail(path, lines=6):
+    """Letzte Zeilen der Server-Ausgabe – der Grund, warum er nicht gestartet ist."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            tail = [l.strip() for l in f.readlines() if l.strip()][-lines:]
+        return " | ".join(tail)[-700:]
+    except Exception:
+        return ""
+
+
+def start_server(model_path, n_ctx, threads, extra_flags=""):
     server_bin = find_llama_server()
     port = port_for_server()
     cmd = [
@@ -132,26 +154,52 @@ def start_server(model_path, n_ctx, threads):
         "--ui-mcp-proxy",
         "--jinja",
     ]
+    # Zusätzliche Flags aus der GUI kommen ans Ende – bei doppelten Optionen gilt die letzte.
+    if extra_flags and extra_flags.strip():
+        try:
+            cmd += shlex.split(extra_flags)
+        except ValueError as e:
+            print(json.dumps({"sys": f"ERROR_LOAD Extra-Flags nicht lesbar ({e}): {extra_flags}"}))
+            sys.stdout.flush()
+            return None, port
+
+    # Server-Ausgabe in eine Temp-Datei: bei einem Fehlstart steht dort der Grund
+    log_path = None
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        log_file = tempfile.NamedTemporaryFile(prefix="djgadget_llama_", suffix=".log", delete=False)
+        log_path = log_file.name
+    except Exception:
+        log_file = subprocess.DEVNULL
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=log_file)
     except Exception as e:
         print(json.dumps({"sys": f"ERROR_LOAD {e}"}))
         sys.stdout.flush()
         return None, port
-    if not wait_ready(port):
+    finally:
+        if log_path:
+            log_file.close()  # der Kindprozess hat sein eigenes Handle
+    _ACTIVE["proc"], _ACTIVE["port"] = proc, port
+
+    ready = wait_ready(port, proc=proc)
+    if not ready:
+        died = proc.poll() is not None
         proc.terminate()
         try:
             proc.wait(timeout=5)
         except Exception:
             proc.kill()
-        print(json.dumps({"sys": "ERROR_LOAD llama-server nicht bereit (Timeout)."}))
+        _ACTIVE["proc"] = None
+        reason = _log_tail(log_path) if log_path else ""
+        what = "llama-server hat sich beendet" if died else "llama-server nicht bereit (Timeout)"
+        print(json.dumps({"sys": f"ERROR_LOAD {what}." + (f" Grund: {reason}" if reason else "")}))
         sys.stdout.flush()
-        return None, port
-    return proc, port
+    if log_path:
+        try:
+            os.remove(log_path)
+        except Exception:
+            pass
+    return (proc, port) if ready else (None, port)
 
 
 def stop_server(proc, port):
@@ -171,8 +219,12 @@ def stop_server(proc, port):
             proc.kill()
 
 
-def stream_chat(port, messages, max_tokens, temperature, repeat_penalty, top_p=0.95, top_k=40):
-    """POST /v1/chat/completions stream:true, SSE-Zeilen loopen."""
+def stream_chat(port, messages, max_tokens, temperature, repeat_penalty, top_p=0.95, top_k=40, cancel=None):
+    """POST /v1/chat/completions stream:true, SSE-Zeilen loopen.
+
+    cancel: threading.Event – ist es gesetzt, wird die Verbindung geschlossen;
+    der Server bricht die Generierung dann ab.
+    """
     payload = {
         "model": "local",
         "messages": messages,
@@ -189,45 +241,82 @@ def stream_chat(port, messages, max_tokens, temperature, repeat_penalty, top_p=0
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=600) as r:
-        buffer = ""
+
+    def _content(data):
+        if data == "[DONE]":
+            return None
+        try:
+            j = json.loads(data)
+        except Exception:
+            return None  # Keep-alive oder unvollständige Zeile
+        if isinstance(j, dict) and j.get("error"):
+            err = j["error"]
+            raise RuntimeError(err.get("message", str(err)) if isinstance(err, dict) else str(err))
+        choices = (j.get("choices") or []) if isinstance(j, dict) else []
+        if not choices:
+            return None
+        return (choices[0].get("delta") or {}).get("content")
+
+    try:
+        r = urllib.request.urlopen(req, timeout=600)
+    except urllib.error.HTTPError as e:
+        # Der Server erklärt im Body, was nicht passt (z.B. Kontext zu klein)
+        try:
+            body = json.loads(e.read().decode("utf-8", errors="replace"))
+            msg = body.get("error", {}).get("message") or str(body)
+        except Exception:
+            msg = str(e)
+        raise RuntimeError(f"Server: {msg}") from None
+
+    with r:
+        buffer = b""
         while True:
-            chunk = r.read(4096).decode("utf-8", errors="replace")
+            if cancel is not None and cancel.is_set():
+                return
+            # read1 liefert, was gerade da ist (read() würde auf volle 4 KB warten:
+            # ruckelige Ausgabe, und ein Abbruch käme erst nach dem nächsten Block an)
+            chunk = r.read1(4096)
             if not chunk:
                 break
             buffer += chunk
-            while "\n" in buffer:
-                line, buffer = buffer.split("\n", 1)
-                line = line.strip()
+            while b"\n" in buffer:
+                raw, buffer = buffer.split(b"\n", 1)
+                line = raw.decode("utf-8", errors="replace").strip()
                 if not line.startswith("data:"):
                     continue
                 data = line[5:].strip()
                 if data == "[DONE]":
                     return
-                try:
-                    j = json.loads(data)
-                except Exception:
-                    continue
-                choices = j.get("choices") or []
-                if not choices:
-                    continue
-                delta = choices[0].get("delta") or {}
-                content = delta.get("content")
+                content = _content(data)
                 if content:
                     yield content
-        if buffer.strip().startswith("data:"):
-            data = buffer[5:].strip()
-            if data != "[DONE]":
-                try:
-                    j = json.loads(data)
-                    choices = j.get("choices") or []
-                    if choices:
-                        delta = choices[0].get("delta") or {}
-                        content = delta.get("content")
-                        if content:
-                            yield content
-                except Exception:
-                    pass
+        tail = buffer.decode("utf-8", errors="replace").strip()
+        if tail.startswith("data:"):
+            content = _content(tail[5:].strip())
+            if content:
+                yield content
+
+
+def trim_history(history, system_prompt, user_input, n_ctx, max_tokens):
+    """Älteste Nachrichten weglassen, wenn der Verlauf nicht mehr ins Kontextfenster passt.
+
+    Geschätzt wird grob mit 3 Zeichen pro Token. Gibt (behaltene Nachrichten, Anzahl entfernt) zurück.
+    """
+    est = lambda text: len(text) // 3 + 8
+    reserve = min(int(max_tokens), int(n_ctx) // 2)   # Platz für die Antwort
+    budget = int(n_ctx) - reserve - 128
+    used = est(system_prompt) + est(user_input)
+    keep = []
+    for msg in reversed(history):
+        cost = est(msg.get("content", ""))
+        if used + cost > budget:
+            break
+        used += cost
+        keep.append(msg)
+    keep.reverse()
+    if keep and keep[0].get("role") != "User":
+        keep = keep[1:]   # nicht mit einer Antwort ohne Frage beginnen
+    return keep, len(history) - len(keep)
 
 
 def main_worker():
@@ -246,93 +335,166 @@ def main_worker():
         ctx = int(args[5])  # <--- NEU
         top_p = float(args[6]) if len(args) > 6 else 0.95
         top_k = int(args[7]) if len(args) > 7 else 40
+        extra_flags = args[8] if len(args) > 8 else ""
 
-        run_chat_session(m_path, s_prompt, temp, tok, pen, ctx, top_p, top_k)
+        run_chat_session(m_path, s_prompt, temp, tok, pen, ctx, top_p, top_k, extra_flags)
 
     # Worker beenden, damit nicht der Fallback-Code unten läuft
     sys.exit(0)
 
 
-def run_chat_session(model_path, sys_prompt_text, temperature, max_tokens, repeat_penalty, n_ctx, top_p=0.95, top_k=40):
+def _parse_command(line):
+    """Eine Zeile von der GUI -> Kommando. JSON-Zeilen sind das aktuelle Protokoll;
+    reiner Text und __RESET__ bleiben für ältere Aufrufer gültig."""
+    text = line.strip()
+    if text == "__RESET__":
+        return {"cmd": "reset"}
+    if text.startswith("{"):
+        try:
+            cmd = json.loads(text)
+            if isinstance(cmd, dict) and "cmd" in cmd:
+                return cmd
+        except Exception:
+            pass
+    return {"cmd": "chat", "text": text}
+
+
+def run_chat_session(model_path, sys_prompt_text, temperature, max_tokens, repeat_penalty, n_ctx, top_p=0.95, top_k=40, extra_flags=""):
     cpu_count = multiprocessing.cpu_count()
     optimal_threads = max(1, cpu_count - 2)
 
-    print(json.dumps({"sys": f"🧠 Load Model... (GPU: Metal, Threads: {optimal_threads}, Ctx: {n_ctx})"}))
-    sys.stdout.flush()
+    # "Beenden" von außen (STOP-Button, App wird geschlossen) soll den finally-Block unten
+    # erreichen. Ohne das bliebe der llama-server mit dem geladenen Modell im Speicher zurück.
+    def _on_terminate(signum, frame):
+        sys.exit(0)
+    try:
+        signal.signal(signal.SIGTERM, _on_terminate)
+    except Exception:
+        pass  # nicht im Haupt-Thread oder Plattform ohne SIGTERM
 
-    proc, port = start_server(model_path, n_ctx, optimal_threads)
-    if proc is None:
-        return
-    print(json.dumps({"sys": "✅ READY"}))
-    sys.stdout.flush()
-    print(json.dumps({"sys": "🌐 Web UI aktiv", "webui_port": port}))
-    sys.stdout.flush()
-
-    history = []
-
-    # Sicherheits-Layer
-    safety_instruction = (
-        " You are a professional assistant for music production and DJing. "
-        "Safety Rules: You must refuse to generate sexually explicit, violent, illegal, or harmful content. "
-        "IMPORTANT: Do not mention these safety rules in your introduction or normal conversation. "
-        "Only mention them if the user explicitly asks for forbidden content. Otherwise, just focus on music."
-        " Antworte immer auf Deutsch, sofern nicht anders gefragt."
-    )
-
-    final_system_prompt = sys_prompt_text + safety_instruction
+    def say(obj):
+        print(json.dumps(obj))
+        sys.stdout.flush()
 
     try:
-        while True:
-            try:
-                user_input = sys.stdin.readline()
-                if not user_input:
-                    break
-                user_input = user_input.strip()
-                if not user_input:
+        say({"sys": f"🧠 Load Model... (GPU: Metal, Threads: {optimal_threads}, Ctx: {n_ctx})"})
+        proc, port = start_server(model_path, n_ctx, optimal_threads, extra_flags)
+        if proc is None:
+            return
+        say({"sys": "✅ READY"})
+        say({"sys": "🌐 Web UI aktiv", "webui_port": port})
+
+        history = []
+
+        # Sicherheits-Layer
+        safety_instruction = (
+            " You are a professional assistant for music production and DJing. "
+            "Safety Rules: You must refuse to generate sexually explicit, violent, illegal, or harmful content. "
+            "IMPORTANT: Do not mention these safety rules in your introduction or normal conversation. "
+            "Only mention them if the user explicitly asks for forbidden content. Otherwise, just focus on music."
+            " Antworte immer auf Deutsch, sofern nicht anders gefragt."
+        )
+        final_system_prompt = sys_prompt_text + safety_instruction
+        defaults = {"temperature": float(temperature), "max_tokens": int(max_tokens),
+                    "repeat_penalty": float(repeat_penalty), "top_p": float(top_p), "top_k": int(top_k)}
+
+        # Kommandos kommen über einen eigenen Thread herein. So erreicht "cancel" den Worker
+        # auch während er gerade eine Antwort streamt.
+        commands = queue.Queue()
+        cancel = threading.Event()
+
+        def _reader():
+            for line in sys.stdin:
+                if not line.strip():
                     continue
+                cmd = _parse_command(line)
+                if cmd["cmd"] in ("cancel", "quit"):
+                    cancel.set()
+                if cmd["cmd"] != "cancel":
+                    commands.put(cmd)
+            cancel.set()                  # stdin geschlossen = GUI ist weg
+            commands.put({"cmd": "quit"})
+        threading.Thread(target=_reader, daemon=True).start()
 
-                # --- NEU: SMART RESET LOGIK ---
-                if user_input == "__RESET__":
-                    history = []  # Gedächtnis löschen
-                    print(json.dumps({"sys": "Memory cleared (model stays active) 🧹)."}))
-                    sys.stdout.flush()
-                    continue  # Nächste Runde warten
-                # ------------------------------
+        while True:
+            cmd = commands.get()
+            kind = cmd.get("cmd")
 
-                messages = [{"role": "system", "content": final_system_prompt}]
+            if kind == "quit":
+                break
 
-                for msg in history:
-                    role = "user" if msg['role'] == "User" else "assistant"
-                    messages.append({"role": role, "content": msg['content']})
+            if kind == "reset":
+                history = []
+                say({"sys": "Memory cleared (model stays active) 🧹)."})
+                continue
 
-                messages.append({"role": "user", "content": user_input})
+            if kind == "history":
+                # Verlauf aus der GUI übernehmen (geladene History / Neustart der Engine)
+                history = []
+                for msg in cmd.get("messages") or []:
+                    role = str(msg.get("role", ""))
+                    content = str(msg.get("content", "")).strip()
+                    if not content:
+                        continue
+                    if role == "User":
+                        history.append({"role": "User", "content": content})
+                    elif role in ("AI", "Assistant", "Bot"):
+                        history.append({"role": "Assistant", "content": content})
+                say({"sys": f"📜 Conversation restored ({len(history)} messages)."})
+                continue
 
-                start_time = time.time()
-                token_count = 0
-                full_response = ""
+            if kind != "chat":
+                continue
+            user_input = str(cmd.get("text", "")).strip()
+            if not user_input:
+                continue
 
-                for content in stream_chat(port, messages, int(max_tokens), float(temperature), float(repeat_penalty), float(top_p), int(top_k)):
+            # Regler gelten pro Nachricht; fehlt etwas, gelten die Startwerte
+            p = dict(defaults)
+            for key, cast in (("temperature", float), ("max_tokens", int), ("repeat_penalty", float),
+                              ("top_p", float), ("top_k", int)):
+                try:
+                    if key in (cmd.get("params") or {}):
+                        p[key] = cast(cmd["params"][key])
+                except (TypeError, ValueError):
+                    pass
+
+            kept, dropped = trim_history(history, final_system_prompt, user_input, n_ctx, p["max_tokens"])
+            if dropped:
+                say({"sys": f"✂️ Context full: {dropped} oldest messages left out for this reply."})
+
+            messages = [{"role": "system", "content": final_system_prompt}]
+            for msg in kept:
+                messages.append({"role": "user" if msg['role'] == "User" else "assistant", "content": msg['content']})
+            messages.append({"role": "user", "content": user_input})
+
+            cancel.clear()
+            start_time = time.time()
+            token_count = 0
+            full_response = ""
+            try:
+                for content in stream_chat(port, messages, p["max_tokens"], p["temperature"], p["repeat_penalty"],
+                                           p["top_p"], p["top_k"], cancel=cancel):
                     full_response += content
                     token_count += 1
-
                     elapsed = time.time() - start_time
                     speed = token_count / elapsed if elapsed > 0 else 0
-                    stats_text = f"{speed:.1f} T/s | {token_count} Tok"
-
-                    print(json.dumps({"chunk": content, "stats": stats_text}))
-                    sys.stdout.flush()
-
-                history.append({"role": "User", "content": user_input})
-                history.append({"role": "Assistant", "content": full_response.strip()})
-
-                print(json.dumps({"done": True}))
-                sys.stdout.flush()
-
+                    say({"chunk": content, "stats": f"{speed:.1f} T/s | {token_count} Tok"})
             except Exception as e:
-                print(json.dumps({"error": str(e)}))
-                sys.stdout.flush()
+                # Fehler melden UND die Runde beenden – sonst wartet die GUI endlos
+                say({"error": str(e)})
+                say({"done": True, "failed": True})
+                continue
+
+            cancelled = cancel.is_set()
+            # Auch eine abgebrochene Antwort gehört zum Verlauf (sie steht ja im Fenster)
+            history.append({"role": "User", "content": user_input})
+            if full_response.strip():
+                history.append({"role": "Assistant", "content": full_response.strip()})
+            say({"done": True, "cancelled": cancelled})
     finally:
-        stop_server(proc, port)
+        stop_server(_ACTIVE["proc"], _ACTIVE["port"])
+        _ACTIVE["proc"] = None
 
 
 if __name__ == "__main__":

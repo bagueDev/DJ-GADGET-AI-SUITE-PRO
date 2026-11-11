@@ -18,7 +18,9 @@ import json
 import time
 import webbrowser
 # WICHTIG: RightClickMenu hier importieren
-from helpers import get_executable_path, export_chat_html, RightClickMenu, get_llama_server_override, set_llama_server_override, clear_llama_server_override
+from helpers import (get_executable_path, export_chat_html, RightClickMenu, get_llama_server_override,
+                     set_llama_server_override, clear_llama_server_override,
+                     get_chat_extra_flags, set_chat_extra_flags)
 
 # In den Tabs (Analyze, Stems, etc.)
 def get_worker_cmd(worker_type):
@@ -72,8 +74,10 @@ class ChatTab(ctk.CTkFrame):
         self.history_combo.pack(side="right", padx=5)
 
         # Row 0b: llama-server Binary Override (optional)
-        row_srv = ctk.CTkFrame(self, fg_color="transparent")
-        row_srv.grid(row=1, column=0, sticky="ew", padx=10, pady=(2, 0))
+        srv_box = ctk.CTkFrame(self, fg_color="transparent")
+        srv_box.grid(row=1, column=0, sticky="ew", padx=10, pady=(2, 0))
+        row_srv = ctk.CTkFrame(srv_box, fg_color="transparent")
+        row_srv.pack(fill="x")
         ctk.CTkLabel(row_srv, text="🔧 Server-Binary (optional):").pack(side="left", padx=5)
         self.chat_server_entry = ctk.CTkEntry(row_srv)
         self.chat_server_entry.pack(side="left", fill="x", expand=True, padx=5)
@@ -82,6 +86,14 @@ class ChatTab(ctk.CTkFrame):
         ctk.CTkButton(row_srv, text="🗑️", width=30, command=self.clear_server_binary, fg_color="gray").pack(side="left", padx=2)
         self.lbl_server_status = ctk.CTkLabel(row_srv, text="", text_color="gray", width=200)
         self.lbl_server_status.pack(side="left", padx=5)
+
+        # Row 0c: zusätzliche llama-server-Flags (optional, für Fortgeschrittene)
+        row_flags = ctk.CTkFrame(srv_box, fg_color="transparent")
+        row_flags.pack(fill="x", pady=(2, 0))
+        ctk.CTkLabel(row_flags, text="⚙️ Extra server flags (optional):").pack(side="left", padx=5)
+        self.chat_flags_entry = ctk.CTkEntry(row_flags, placeholder_text="e.g. --cache-type-k q8_0 --cache-type-v q8_0   (applied on 🚀 Start)")
+        self.chat_flags_entry.pack(side="left", fill="x", expand=True, padx=5)
+        RightClickMenu(self.chat_flags_entry)
 
         # Row 1: Model
         row1 = ctk.CTkFrame(self, fg_color="transparent")
@@ -199,6 +211,10 @@ class ChatTab(ctk.CTkFrame):
         RightClickMenu(self.chat_input)
         
         ctk.CTkButton(row4, text="💬 Send", width=100, command=self.send_chat_message).pack(side="right")
+        # Bricht nur die laufende Antwort ab – das Modell bleibt geladen (anders als ⏹ STOP)
+        self.btn_cancel_reply = ctk.CTkButton(row4, text="✋ Stop reply", width=100, command=self.cancel_reply,
+                                              fg_color="gray", state="disabled")
+        self.btn_cancel_reply.pack(side="right", padx=5)
         ctk.CTkButton(row4, text="📄🌐HTML Export", width=100, command=self.export_chat, fg_color="green").pack(side="right", padx=5)
         self.btn_webui = ctk.CTkButton(row4, text="🌐 Web UI", width=100, command=self.open_web_ui, state="disabled")
         self.btn_webui.pack(side="right", padx=5)
@@ -208,6 +224,10 @@ class ChatTab(ctk.CTkFrame):
         self.refresh_chat_models()
         self.refresh_history_list()
         self._load_server_override()
+        self.is_generating = False
+        saved_flags = get_chat_extra_flags()
+        if saved_flags:
+            self.chat_flags_entry.insert(0, saved_flags)
 
     # --- MODEL & PATH LOGIC ---
     def get_default_models_dir(self):
@@ -360,6 +380,9 @@ class ChatTab(ctk.CTkFrame):
             self.chat_display.see("end")
             self.chat_display.configure(state="disabled")
             self.lbl_stats.configure(text="History loaded.")
+            # Läuft die Engine schon, bekommt das Modell den geladenen Verlauf sofort.
+            # (Sonst wird er beim nächsten 🚀 Start übergeben.)
+            self._send_history()
         except Exception as e:
             messagebox.showerror("Error", f"Load error ⚠️: {e}")
 
@@ -387,7 +410,10 @@ class ChatTab(ctk.CTkFrame):
         self.chat_display.insert("end", f"\nSYSTEM: Start Chat 💬..\nModel: {m}\n")
         self.chat_display.configure(state="disabled")
         
-        threading.Thread(target=self.run_chat_process, args=(path, sys_p, temp, tok, pen, topp, topk), daemon=True).start()
+        flags = self.chat_flags_entry.get().strip()
+        set_chat_extra_flags(flags)   # für den nächsten App-Start merken
+        self.is_generating = False
+        threading.Thread(target=self.run_chat_process, args=(path, sys_p, temp, tok, pen, topp, topk, flags), daemon=True).start()
 
     def open_web_ui(self):
         """Öffnet die native llama.cpp WebUI im Systembrowser."""
@@ -402,8 +428,28 @@ class ChatTab(ctk.CTkFrame):
         self.is_loading_model = False # <--- ABSCHALTEN
         self.is_thinking = False      # <--- ABSCHALTEN
         if self.chat_process:
-            self.chat_process.terminate()
-            self.chat_process = None
+            proc, self.chat_process = self.chat_process, None
+            # Erst "quit" schicken, damit der Worker den llama-server sauber herunterfährt und
+            # das Modell aus dem Speicher verschwindet. Reagiert er nicht, wird er beendet.
+            try:
+                proc.stdin.write(json.dumps({"cmd": "quit"}) + "\n")
+                proc.stdin.flush()
+                proc.stdin.close()
+            except Exception:
+                pass
+
+            def _reap(p=proc):
+                try:
+                    p.wait(timeout=12)
+                except Exception:
+                    p.terminate()   # der Worker fängt das ab und räumt trotzdem auf
+                    try:
+                        p.wait(timeout=8)
+                    except Exception:
+                        p.kill()
+            threading.Thread(target=_reap, daemon=True).start()
+        self.is_generating = False
+        self.btn_cancel_reply.configure(state="disabled", fg_color="gray")
         self.btn_load_chat.configure(state="normal", text="🚀 Start ", fg_color="#007aff")
         self.btn_stop_chat.configure(state="disabled")
         self.btn_clear.configure(state="disabled")
@@ -415,8 +461,7 @@ class ChatTab(ctk.CTkFrame):
     def clear_context(self):
         if self.chat_process:
             try:
-                self.chat_process.stdin.write("__RESET__\n")
-                self.chat_process.stdin.flush()
+                self._send_cmd({"cmd": "reset"})
                 self.chat_display.configure(state="normal")
                 self.chat_display.delete("1.0", "end")
                 self.chat_display.insert("end", "SYSTEM: 🧹 Context cleared.\n")
@@ -425,7 +470,7 @@ class ChatTab(ctk.CTkFrame):
             except Exception as e:
                 self.update_chat_ui("Error", f"Reset failed ❌: {e}")
 
-    def run_chat_process(self, model_path, sys_prompt, temp, tok, pen, topp=0.95, topk=40):
+    def run_chat_process(self, model_path, sys_prompt, temp, tok, pen, topp=0.95, topk=40, extra_flags=""):
            # 1. Index vom Slider holen (0, 1, 2...)
         idx = int(self.slider_n_ctx.get())
             # 2. Echten Context-Wert aus der Liste ziehen
@@ -450,6 +495,7 @@ class ChatTab(ctk.CTkFrame):
             str(int(ctx_size)), # <--- NEU
             str(topp),
             str(int(topk)),
+            extra_flags,
         ])
             
         try:
@@ -462,7 +508,9 @@ class ChatTab(ctk.CTkFrame):
                 text=True, 
                 bufsize=1
             )
-            # ... restlicher Code (while-Schleife) bleibt gleich
+            # Eigene Referenz: self.chat_process wird beim Stoppen auf None gesetzt,
+            # während diese Schleife noch die letzten Zeilen des Workers liest.
+            proc = self.chat_process
             
             # Initialisiere die Variable am Anfang, um UnboundLocalError zu vermeiden
             line = "" 
@@ -471,7 +519,7 @@ class ChatTab(ctk.CTkFrame):
                 if self.app.closing: break
                 
                 # Zeile lesen
-                line = self.chat_process.stdout.readline()
+                line = proc.stdout.readline()
                 if not line: break 
                 
                 line = line.strip()
@@ -493,8 +541,22 @@ class ChatTab(ctk.CTkFrame):
                     
                     if "sys" in data:
                         # Auch im JSON nach READY suchen
-                        if "READY" in data["sys"]: self.is_loading_model = False
+                        if "READY" in data["sys"]:
+                            self.is_loading_model = False
+                            # Steht schon ein Gespräch im Fenster (geladene History oder vorherige
+                            # Sitzung), bekommt das frisch gestartete Modell es mit.
+                            self.after(0, self._send_history)
                         self.after(0, lambda t=data["sys"]: self.update_chat_ui("System", t))
+
+                    if "error" in data:
+                        # Früher wurde das ignoriert: die Anzeige blieb endlos bei "Thinking"
+                        self.is_thinking = False
+                        self.after(0, lambda t=data["error"]: self.update_chat_ui("Error", f"❌ {t}"))
+                        self.after(0, lambda: self.lbl_stats.configure(text="Error", text_color="red"))
+
+                    if data.get("done"):
+                        self.is_thinking = False
+                        self.after(0, lambda c=bool(data.get("cancelled")), f=bool(data.get("failed")): self._reply_finished(c, f))
 
                     if "webui_port" in data:
                         self.webui_port = int(data["webui_port"])
@@ -511,6 +573,11 @@ class ChatTab(ctk.CTkFrame):
                     if not is_technical:
                         current_text = line 
                         self.after(0, lambda t=current_text: self.update_chat_ui("System", t))
+
+            # Der Worker hat sich von selbst beendet (Modell nicht ladbar, falsches Flag, Absturz):
+            # Oberfläche zurücksetzen, sonst bleibt "Start" gesperrt und die Lade-Anzeige blinkt weiter.
+            if self.chat_process is proc and not self.app.closing:
+                self.after(0, lambda: self.stop_chat_engine() if self.chat_process is proc else None)
 
         except Exception as e:
             self.after(0, lambda t=str(e): self.update_chat_ui("Error", t))
@@ -544,13 +611,57 @@ class ChatTab(ctk.CTkFrame):
         self.animate_thinking()
         
         try:
-            # Zeilenumbrüche im Text durch Leerzeichen ersetzen, 
-            # damit es als EINE Zeile an den Prozess geht (wichtig für Llama.cpp)
-            clean_msg = msg.replace("\n", " ")
-            self.chat_process.stdin.write(clean_msg + "\n")
-            self.chat_process.stdin.flush()
-        except:
-            self.update_chat_ui("System", "Error Senden")
+            # Als JSON-Zeile: Zeilenumbrüche im Text bleiben erhalten (Songtexte, Listen),
+            # und die Regler gelten so, wie sie JETZT stehen – nicht nur wie beim Start.
+            self._send_cmd({"cmd": "chat", "text": msg, "params": {
+                "temperature": float(self.chat_temp_slider.get()),
+                "max_tokens": int(self.chat_tokens_slider.get()),
+                "repeat_penalty": float(self.chat_rep_slider.get()),
+                "top_p": float(self.chat_topp_slider.get()),
+                "top_k": int(self.chat_topk_slider.get()),
+            }})
+            self.is_generating = True
+            self.btn_cancel_reply.configure(state="normal", fg_color="#AA0000")
+        except Exception as e:
+            self.is_thinking = False
+            self.update_chat_ui("Error", f"❌ Could not send the message: {e}")
+
+    def _send_cmd(self, cmd):
+        """Schickt ein Kommando als eine JSON-Zeile an den Chat-Worker."""
+        self.chat_process.stdin.write(json.dumps(cmd, ensure_ascii=False) + "\n")
+        self.chat_process.stdin.flush()
+
+    def _send_history(self):
+        """Übergibt das Gespräch aus dem Fenster an das Modell (nur Fragen und Antworten)."""
+        if not self.chat_process or self.chat_process.poll() is not None:
+            return
+        messages = [{"role": m["role"], "content": m["content"]} for m in self.chat_history
+                    if m.get("role") in ("User", "AI", "Assistant") and str(m.get("content", "")).strip()]
+        if not messages:
+            return
+        try:
+            self._send_cmd({"cmd": "history", "messages": messages})
+        except Exception as e:
+            self.update_chat_ui("Error", f"❌ Could not restore the conversation: {e}")
+
+    def cancel_reply(self):
+        """Bricht nur die laufende Antwort ab; das Modell bleibt geladen."""
+        if not self.chat_process or not self.is_generating:
+            return
+        try:
+            self._send_cmd({"cmd": "cancel"})
+            self.lbl_stats.configure(text="Stopping reply...", text_color="yellow")
+        except Exception as e:
+            self.update_chat_ui("Error", f"❌ Could not stop the reply: {e}")
+
+    def _reply_finished(self, cancelled=False, failed=False):
+        self.is_generating = False
+        self.btn_cancel_reply.configure(state="disabled", fg_color="gray")
+        if cancelled:
+            self.update_chat_ui("System", "✋ Reply stopped.")
+            self.lbl_stats.configure(text="Stopped reply", text_color="gray")
+        elif not failed:
+            self.lbl_stats.configure(text_color="gray")
 
     def update_chat_ui(self, sender, text):
                 # 1. Prüfen: Ist der User ganz unten?

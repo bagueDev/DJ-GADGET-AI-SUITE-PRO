@@ -156,6 +156,44 @@ def clear_llama_server_override():
         return False
 
 
+def get_chat_extra_flags():
+    """Zusätzliche llama-server-Flags aus chat_server.json ("" wenn keine gesetzt)."""
+    try:
+        if not os.path.isfile(CONFIG_FILE):
+            return ""
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return str((json.load(f) or {}).get("extra_flags", "") or "").strip()
+    except Exception as e:
+        log.warning("Could not read %s: %s", CONFIG_FILE, e)
+        return ""
+
+
+def set_chat_extra_flags(flags):
+    """Speichert die zusätzlichen llama-server-Flags (leer = Eintrag entfernen)."""
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        data = {}
+        if os.path.isfile(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        flags = (flags or "").strip()
+        if flags == str(data.get("extra_flags", "") or ""):
+            return True
+        if flags:
+            data["extra_flags"] = flags
+        else:
+            data.pop("extra_flags", None)
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        log.warning("Could not write %s: %s", CONFIG_FILE, e)
+        return False
+
+
 def read_tags_quick(path):
     # Standardwerte
     info = {

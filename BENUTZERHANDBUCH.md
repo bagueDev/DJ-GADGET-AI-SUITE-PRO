@@ -170,7 +170,14 @@ Der Converter arbeitet mit festen Regeln, nicht mit einem trainierten KI-Modell.
 - **Erste Regler-Reihe:** 🌡️ Temp (0,1 faktisch – 1,2+ kreativ), 🔢 MaxT (Antwortlänge), 🚫🔁 Rep-Penalty (gegen Wiederholungen, ca. 1,1–1,2).
 - **Zweite Reihe:** 🎯 TopP (0,5 fokussiert – 1,0 offen), 🔝 TopK (wirkt v. a. bei hoher Temp), 🧠 Ctx (512–256k, RAM beachten).
 - **🔧 Server-Binary (optional):** eigene llama-server-Binary über Datei-Picker oder `~/.djgadget/chat_server.json` / `LLAMA_SERVER_PATH`. Standard = gebündelt.
-- System Prompt = Rolle (z. B. Rap-Coach); 🗑️ Clear Context ohne Neustart; 📜 History als JSON; 🌐 HTML-Export; 🌐 Web UI im Browser.
+- System Prompt = Rolle (z. B. Rap-Coach); 🗑️ Clear Context ohne Neustart; 🌐 HTML-Export; 🌐 Web UI im Browser.
+- **Regler wirken sofort:** Temp, MaxT, Rep, TopP und TopK gelten für die nächste Nachricht. Nur **Ctx** und der **System Prompt** werden beim 🚀 Start festgelegt.
+- **✋ Stop reply** bricht nur die laufende Antwort ab, das Modell bleibt geladen. **⏹ STOP** beendet die Engine und gibt den Speicher frei.
+- **Eingabe:** Enter sendet, Shift+Enter macht eine neue Zeile. Zeilenumbrüche kommen beim Modell an (Songtexte, Listen).
+- **📜 History:** Ein geladener Chat wird auch dem Modell übergeben, du kannst also dort weitermachen, wo du aufgehört hast. 💾 Save speichert das aktuelle Gespräch als JSON.
+- **Langes Gespräch:** Passt der Verlauf nicht mehr ins Kontextfenster, lässt die App die ältesten Nachrichten weg und meldet das im Chat („✂️ Context full …"). Mehr Ctx oder 🗑️ Clear Context schaffen Platz.
+- **Fehler** des Modells oder beim Start stehen direkt im Chatfenster, mit Grund.
+- **⚙️ Extra server flags (optional, für Fortgeschrittene):** zusätzliche llama-server-Optionen, die beim 🚀 Start angehängt werden, z. B. `--cache-type-k q8_0 --cache-type-v q8_0` für einen weniger stark komprimierten Zwischenspeicher (mehr RAM, bei langen Gesprächen oft bessere Antworten). Ein falsches Flag verhindert den Start; die Meldung nennt es.
 - **Optionaler Webzugriff per MCP:** MCP-Proxy aktiv. Trage die URL deines eigenen MCP-Servers ein oder nutze V.I.N.C.E.N.T. (Open-Source-MCP-Server). Verbinde nur Server, denen du vertraust.
 
 ## 10. Log 📝

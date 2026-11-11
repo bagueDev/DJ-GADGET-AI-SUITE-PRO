@@ -76,6 +76,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nicht unterstützte Dateitypen und fehlende Dateien gelten als Fehler statt als stiller Erfolg; eine fehlende MP3 wird nicht mehr als leere Datei angelegt.
 - Chat: „Override entfernt" erscheint nur noch, wenn die Server-Einstellung wirklich entfernt wurde.
 
+### 🤖 AI Chat – Grundfunktionen repariert (🤖)
+- **✋ Stop reply** – bricht nur die laufende Antwort ab; das Modell bleibt geladen. Bisher gab es nur ⏹ STOP, das die ganze Engine beendet.
+- **Fehler des Modells erscheinen im Chat** – die Fehlermeldung des Workers wurde nie ausgewertet, die Anzeige blieb endlos bei „Thinking". Jetzt steht der Grund im Fenster (z. B. Kontext zu klein).
+- **Geladene History kennt jetzt auch das Modell** – ein über „📜 History" geladener Chat erschien nur im Fenster. Er wird jetzt an das Modell übergeben, sofort oder beim nächsten 🚀 Start; ebenso das bisherige Gespräch nach einem Neustart der Engine.
+- **Regler gelten pro Nachricht** – Temp, MaxT, Rep, TopP und TopK wirkten nur beim Start der Engine. Nur Ctx braucht weiterhin einen Neustart.
+- **Zeilenumbrüche bleiben erhalten** – mehrzeilige Eingaben (Songtexte, Listen) wurden zu einer Zeile zusammengezogen.
+- **⏹ STOP entlädt das Modell wirklich** – der Worker wurde hart beendet, sein Aufräum-Code lief nicht und der llama-server blieb mit dem Modell im Speicher zurück (nachgestellt: 1 übrig gebliebener Server vorher, 0 jetzt; auch beim Schließen der App und mitten im Laden).
+- **Voller Kontext** – passt der Verlauf nicht mehr ins Kontextfenster, werden die ältesten Nachrichten für die Antwort weggelassen und das im Chat gemeldet, statt mit einem Fehler abzubrechen.
+- **⚙️ Extra server flags** – optionales Feld für zusätzliche llama-server-Optionen (z. B. `--cache-type-k q8_0 --cache-type-v q8_0`), gespeichert in `chat_server.json`. Bei doppelten Optionen gilt die letzte.
+- **Fehlstart mit Grund** – beendet sich der Server beim Start (falsches Flag, Modell nicht ladbar), erscheint die Ursache nach etwa einer Sekunde statt eines Timeouts nach 3 Minuten; die Oberfläche setzt sich danach selbst zurück.
+- Flüssigere Ausgabe (Antwort wurde in 4-KB-Blöcken gelesen); neues Kommando-Protokoll zwischen Tab und Worker (JSON-Zeilen, alte Klartext-Zeilen bleiben gültig).
+
 ### 🔎 Verschluckte Fehler sichtbar gemacht (📝)
 - **Zentrale Warnungen im Log-Tab** – neuer Logger `djgadget` mit Handler in `main.py`; Module ohne Zugriff auf die Oberfläche (`helpers.py`, `melody_generator.py`) und Worker-Threads können damit Meldungen in den Log-Tab schreiben.
 - **18 von 50 stillen `except`-Stellen melden sich jetzt**, ohne dass sich das Verhalten ändert: Ordner konnte nicht angelegt werden (AI_Models, Offline_Models, Whisper_Models, Chat_History, Config), `chat_server.json` nicht les-/schreibbar, Drum-Sample defekt (Synthese als Ersatz), Player (nächster Track, Spulen, Loop-Anzeige), BPM ×2 / ÷2, unlesbarer LRC-Zeitstempel beim SRT-Export, Tag-Schreibfehler im Analyzer-Unterprozess (stderr).
