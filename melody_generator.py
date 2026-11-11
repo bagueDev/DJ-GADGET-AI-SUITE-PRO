@@ -467,7 +467,9 @@ def create_chord_files(root, scale, bpm, bars, progression_name, mode, output_di
             # -----------------------------------------------------------
             # --- DYNAMISCHE HARMONIE-DICHTE ---
             # Wenn Energie niedrig ist, nutzen wir nur einfache Dreiklänge
-            current_mode = "Triads (3-Note)" if energy < 0.7 else mode            
+            # "Melody (Mono)" ist kein Akkord-Typ -> Dreiklänge (sonst bestünde die Akkordspur nur aus Grundtönen)
+            chord_type = "Triads (3-Note)" if "Melody" in mode else mode
+            current_mode = "Triads (3-Note)" if energy < 0.7 else chord_type
             # Wenn Energie SEHR niedrig ist (Intro), spielen wir nur eine lange Fläche (Pad)
             # anstatt der rhythmischen Stabs
             current_pattern = [0] if energy < 0.4 else pattern
@@ -503,14 +505,18 @@ def create_chord_files(root, scale, bpm, bars, progression_name, mode, output_di
                     chord_notes.append(scale_notes[idx + 4])
                 
                 elif "Sus2" in current_mode:
-                    # Schwebend: Sekunde statt Terz
-                    chord_notes.append(scale_notes[idx + 1])
-                    chord_notes.append(scale_notes[idx + 4])
+                    # Schwebend: große Sekunde statt Terz. Liegt in der Skala an dieser Stufe nur
+                    # eine kleine Sekunde (reibt), wird die große genommen.
+                    second = scale_notes[idx + 1]
+                    chord_notes.append(second if second - root_note == 2 else root_note + 2)
+                    chord_notes.append(root_note + 7)  # Sus-Akkorde immer mit reiner Quinte
                 
                 elif "Sus4" in current_mode:
-                    # Spannung: Quarte statt Terz
-                    chord_notes.append(scale_notes[idx + 3])
-                    chord_notes.append(scale_notes[idx + 4])
+                    # Spannung: reine Quarte statt Terz. Liegt in der Skala an dieser Stufe eine
+                    # übermäßige Quarte (Tritonus), wird die reine genommen.
+                    fourth = scale_notes[idx + 3]
+                    chord_notes.append(fourth if fourth - root_note == 5 else root_note + 5)
+                    chord_notes.append(root_note + 7)  # Sus-Akkorde immer mit reiner Quinte
                 
                 elif "Power" in current_mode:
                     # Nur die Quinte (Rock/Techno)
@@ -2312,7 +2318,10 @@ def create_full_loop(root, scale, bpm, bars, time_sig, octave, mode, density, sw
 
         print("-> Step 4: Generating Melody...")
         _step(4, "🎶 Melody...")
-        wav_m, mid_m = create_melody_files(root, scale, bpm, bars, time_sig, octave, mode, density, swing, human, sound, genre, prog, output_dir, arr_mode)
+        # Die Melodie bleibt im Full Loop einstimmig. "Mode" beschreibt hier den Akkord-Typ;
+        # früher galt er für beide Spuren zugleich (Mono -> Akkordspur nur Grundtöne,
+        # Triads -> Melodie in dreistimmigen Blöcken).
+        wav_m, mid_m = create_melody_files(root, scale, bpm, bars, time_sig, octave, "Melody (Mono)", density, swing, human, sound, genre, prog, output_dir, arr_mode)
         if _stopped():
             print("⏹ FULL LOOP STOPPED BY USER (nach Melody)")
             return None, None

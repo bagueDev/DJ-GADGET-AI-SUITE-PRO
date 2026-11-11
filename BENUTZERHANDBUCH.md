@@ -89,6 +89,11 @@ Die App ist portabel — lege sie mit diesen Ordnern zusammen ab (fehlende Ordne
 - Dropdown-Wechsel (Genre, Waveform, Progression, Voicing) spielen automatisch eine 2-Bar-Vorschau ab. Dein generiertes Ergebnis bleibt dabei erhalten: ▶ Play und 💾 MIDI beziehen sich weiter auf die volle Sequenz. Während einer laufenden Generierung gibt es keine Vorschau.
 - **Progression „Random":** Im Full Loop wird einmal ein Preset gewürfelt, das alle Spuren gemeinsam spielen; welches es war, steht im Log. Im einzelnen Chords-Modus bleibt „Random" eine zufällige Stufe pro Takt.
 
+### Mode: Melodie und Akkorde 🎼
+- **Im Full Loop** bestimmt „Mode" den Akkord-Typ (Power, Triads, 7ths, 9ths, Sus2, Sus4, Add9, 6/9). Die Melodie ist dort immer einstimmig. Mit „Melody (Mono)" spielt die Akkordspur Dreiklänge.
+- **Im einzelnen 🎶 Melody-Modus** macht „Triads" aus der Melodie dreistimmige Blöcke; alle anderen Einstellungen ergeben eine einstimmige Linie.
+- **Sus2 / Sus4** nutzen immer große Sekunde bzw. reine Quarte mit reiner Quinte, auch wenn die Skala an dieser Stufe einen anderen Ton hätte.
+
 ### Drums & Bass im Full Loop 🥁 (neu in v3.3.1)
 - **Bass folgt der Kick:** Bei DnB, Trap und HipHop spielt der Bass mit **Complexity „Steady (Groove)" oder „Busy (Melodic)"** genau auf den Kicks der Drums. Density verändert dort die Hats und Ghost-Snares, nicht mehr die Zahl der Bassnoten.
 - Willst du ein eigenes Bass-Muster, wähle unter Complexity eines der festen Patterns (z. B. „Neuro Roller"); die bleiben unabhängig von der Kick.
@@ -114,7 +119,7 @@ Typische Anwendungen:
 - **Gutes Ergebnis festhalten:** Lock setzen, bevor du weiterklickst, oder den Seed aus dem Log notieren.
 - **Gleiche Melodie, neuer Sound:** Lock an, Waveform wechseln, neu generieren. Die Noten bleiben gleich.
 - **Vorschau passt zum Ergebnis:** Die 2-Bar-Vorschau nutzt den Seed im Feld und entspricht dem Anfang der vollen Sequenz.
-- **Einzelspur aus dem Full Loop:** Mit gleichem Seed, gleichen Einstellungen und derselben Progression liefert 🎶 Melody allein dieselbe Melodie wie im Full Loop.
+- **Einzelspur aus dem Full Loop:** Mit gleichem Seed, gleichen Einstellungen, derselben Progression und Mode „Melody (Mono)" liefert 🎶 Melody allein dieselbe Melodie wie im Full Loop.
 
 Ändert sich eine Einstellung, die Noten beeinflusst (Skala, Key, Density, Bars, Progression, Arrangement), ändert sich auch das Ergebnis trotz gleichem Seed.
 

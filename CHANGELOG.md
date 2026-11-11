@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Jazz-Comping wird pro Takt statt pro Schritt gewürfelt; Humanize-Jitter gilt pro Schlag und summiert sich nicht mehr auf.
 
 ### 🎼 Melody Lab – Generator-Fixes (🎹)
+- **Full Loop: „Mode" gilt nur noch für die Akkorde, die Melodie bleibt einstimmig.** Bisher steuerte die Einstellung beide Spuren zugleich: Mit „Melody (Mono)" bestand die Akkordspur nur aus Grundtönen, mit „Triads" spielte die Melodie durchgehend dreistimmige Blöcke. Eine einstimmige Melodie über vollen Akkorden war im Full Loop nicht möglich. „Melody (Mono)" ergibt für die Akkordspur jetzt Dreiklänge (auch im einzelnen Chords-Modus).
+- **Sus2 / Sus4 mit reinen Intervallen** – die Töne kamen aus der Skala, sodass auf manchen Stufen ein Tritonus statt der Quarte bzw. eine kleine Sekunde entstand. Jetzt immer große Sekunde bzw. reine Quarte mit reiner Quinte.
 - **Melodie klebte am oberen Rand** – die „Magnet"-Logik wählte fast immer den Ton darüber; ab Takt 3 lagen 87–97 % der Noten ganz oben. Jetzt hat der gewürfelte Ton Vorrang, Nachbartöne sind Ausweichtöne in zufälliger Reihenfolge (7–12 % am Rand, mehr verschiedene Töne, voller Tonbereich).
 - **7 Progression-Presets ohne Rezept** – „Pop Anthem" und „Classic House" scheiterten an einem Leerzeichen, die fünf Reggae-Presets fehlten im Backend ganz und liefen still als „Random". Neuer toleranter Lookup `resolve_progression()` (ignoriert Emojis/Leerzeichen), Reggae-Rezepte ergänzt – 43/43 Presets greifen.
 - **Full Loop mit „Random"** – Chords würfelten pro Takt eine Stufe, Bass und Melodie blieben auf dem Grundton. Jetzt wird einmal ein Preset gewürfelt, das alle Spuren gemeinsam nutzen (steht im Log: `🎲 Random progression used: …`).
