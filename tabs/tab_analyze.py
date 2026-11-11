@@ -5,6 +5,10 @@
 # (at your option) any later version.
 
 import customtkinter as ctk
+import logging
+
+# Warnungen landen über den Handler in main.py im Log-Tab
+log = logging.getLogger("djgadget")
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
@@ -570,7 +574,8 @@ class AnalyzeTab(ctk.CTkFrame):
             self.exit_pending = False
             try:
                 self._finalize_audio_ui()
-            except: pass
+            except Exception as e:
+                log.warning("Player: could not reset the loop display: %s", e)
 
         except Exception as e:
             print(f"SYNC WARNING: {e}")
@@ -825,7 +830,8 @@ class AnalyzeTab(ctk.CTkFrame):
                     v = list(self.tree.item(iid, 'values'))
                     v[1] = new_b
                     self.tree.item(iid, values=v)
-                except: pass
+                except Exception as e:
+                    log.warning("BPM x%s failed for %s: %s", factor, t.get('Dateiname', iid), e)
 
     # --- SCAN & WORKER LOGIC ---
 
@@ -1657,8 +1663,8 @@ class AnalyzeTab(ctk.CTkFrame):
             else:
                 self.lbl_status_title.configure(text="Playlist End 🏁.", text_color="gray")
                 self.lbl_status_artist.configure(text="")
-        except:
-            pass
+        except Exception as e:
+            log.warning("Player: could not start the next track: %s", e)
         
     def seek_rel(self, seconds):
         if not self.current_playing_path: return
@@ -1672,7 +1678,8 @@ class AnalyzeTab(ctk.CTkFrame):
             self.is_paused = False
             self.btn_play.configure(text="⏸ Pause", fg_color="#FFA500")
             self.update_timer()
-        except: pass
+        except Exception as e:
+            log.warning("Player: seeking failed: %s", e)
         
     def set_font_size(self, size):
         style = ttk.Style()

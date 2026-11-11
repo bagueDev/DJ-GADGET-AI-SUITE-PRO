@@ -5,6 +5,10 @@
 # (at your option) any later version.
 
 import customtkinter as ctk
+import logging
+
+# Warnungen landen über den Handler in main.py im Log-Tab
+log = logging.getLogger("djgadget")
 from tkinter import filedialog, messagebox
 import os
 import sys
@@ -214,7 +218,7 @@ class ChatTab(ctk.CTkFrame):
         path = os.path.join(base, "AI_Models")
         if not os.path.exists(path): 
             try: os.makedirs(path)
-            except: pass
+            except Exception as e: log.warning("Could not create folder %s: %s", path, e)
         return path
 
     def browse_model_dir(self):
@@ -309,7 +313,7 @@ class ChatTab(ctk.CTkFrame):
         p = os.path.join(base, "Chat_History")
         if not os.path.exists(p): 
             try: os.makedirs(p)
-            except: pass
+            except Exception as e: log.warning("Could not create folder %s: %s", p, e)
         return p
 
     def refresh_history_list(self):

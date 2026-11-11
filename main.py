@@ -16,6 +16,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 # Erst danach:
 import shutil
 import threading
+import logging
 import pandas as pd
 import json
 import xml.etree.ElementTree as ET
@@ -37,6 +38,19 @@ from tabs.tab_chat import ChatTab
 from tabs.tab_log import LogTab
 
 from helpers import perform_export, perform_update, safe_playlist_name, EXPORT_EXTENSIONS, ShortcutOverviewWindow
+
+class _LogTabHandler(logging.Handler):
+    """Leitet Warnungen des Loggers "djgadget" in den Log-Tab (auch aus Worker-Threads)."""
+    def __init__(self, app):
+        super().__init__(level=logging.WARNING)
+        self.app = app
+
+    def emit(self, record):
+        try:
+            self.app.after(0, self.app.log_tab.log, f"⚠️ {record.getMessage()}")
+        except Exception:
+            pass  # App wird gerade geschlossen – dann gibt es keinen Log-Tab mehr
+
 
 # Setup
 ctk.set_appearance_mode("Dark")
@@ -144,6 +158,9 @@ class DJApp(ctk.CTk):
         # Tab-Klassen laden und "self" (die App) übergeben
         self.log_tab = LogTab(t_log)
         self.log_tab.pack(fill="both", expand=True)
+        # Warnungen aus allen Modulen (logging "djgadget") im Log-Tab anzeigen.
+        # Muss vor den anderen Tabs stehen, damit auch deren Start-Warnungen ankommen.
+        logging.getLogger("djgadget").addHandler(_LogTabHandler(self))
 
         self.analyze_tab = AnalyzeTab(t_an, self)
         self.analyze_tab.pack(fill="both", expand=True)

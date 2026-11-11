@@ -5,6 +5,10 @@
 # (at your option) any later version.
 
 import customtkinter as ctk
+import logging
+
+# Warnungen landen über den Handler in main.py im Log-Tab
+log = logging.getLogger("djgadget")
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import os
@@ -216,7 +220,7 @@ class StemsTab(ctk.CTkFrame):
         p = os.path.join(base, "Offline_Models")
         if not os.path.exists(p): 
             try: os.makedirs(p)
-            except: pass
+            except Exception as e: log.warning("Could not create folder %s: %s", p, e)
         return p
 
     def dl_trigger(self):

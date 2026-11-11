@@ -80,11 +80,11 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
             audio = MP4(file_path)
             if clean(bpm): 
                 try: audio['tmpo'] = [int(float(clean(bpm)))]
-                except: pass
+                except Exception as e: print(f"Tag warning: BPM {bpm!r} not written to {file_path}: {e}", file=sys.stderr)
             if clean(camelot): audio['\xa9cmt'] = clean(camelot)
             if clean(track):
                 try: audio['trkn'] = [(int(clean(track)), 0)]
-                except: pass
+                except Exception as e: print(f"Tag warning: track number {track!r} not written to {file_path}: {e}", file=sys.stderr)
             audio.save()
         elif ext in ['.wav', '.aiff', '.aif']:
             audio = WAVE(file_path) if ext == '.wav' else AIFF(file_path)
@@ -100,7 +100,9 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
                 audio.tags.add(APIC(encoding=3, mime=mime_type, type=3, desc=u'Cover', data=img_data))
             audio.save(v2_version=3)
         return True
-    except: return False
+    except Exception as e:
+        print(f"Tag error: could not write tags to {file_path}: {type(e).__name__}: {e}", file=sys.stderr)
+        return False
     
 def detect_key_advanced(y, sr):
     tuning = librosa.estimate_tuning(y=y, sr=sr)

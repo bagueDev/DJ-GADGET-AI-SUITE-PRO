@@ -21,6 +21,10 @@ import os
 import threading
 import functools
 import zlib
+import logging
+
+# Warnungen landen über den Handler in main.py im Log-Tab
+log = logging.getLogger("djgadget")
 
 # Letzter Fehler pro Thread, damit die GUI die echte Ursache im Log zeigen kann
 # (in der gebauten App gibt es kein Terminal für die print-Ausgaben).
@@ -1086,7 +1090,8 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                     try:
                         audio, _ = librosa.load(path, sr=sr)
                         return audio
-                    except: pass
+                    except Exception as e:
+                        log.warning("Drum sample %s could not be loaded, using the synthetic sound: %s", filename, e)
             return fallback_func()
         # Jetzt alle Sounds in ein Dictionary laden
         # Alle 12 Sounds laden (Hybrid: Datei oder Synthese)

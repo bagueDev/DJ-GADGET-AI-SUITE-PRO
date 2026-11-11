@@ -5,6 +5,10 @@
 # (at your option) any later version.
 
 import customtkinter as ctk
+import logging
+
+# Warnungen landen über den Handler in main.py im Log-Tab
+log = logging.getLogger("djgadget")
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import os
@@ -215,7 +219,7 @@ class TranscribeTab(ctk.CTkFrame):
         p = os.path.join(base, "Whisper_Models")
         if not os.path.exists(p): 
             try: os.makedirs(p)
-            except: pass
+            except Exception as e: log.warning("Could not create folder %s: %s", p, e)
         return p
 
     def refresh_whisper_models(self):
@@ -490,7 +494,8 @@ class TranscribeTab(ctk.CTkFrame):
             minutes = minutes % 60
             
             return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
-        except:
+        except Exception as e:
+            log.warning("Unreadable LRC timestamp %r, using 00:00:00 in the SRT: %s", lrc_time, e)
             return "00:00:00,000"       
                     
     def convert_lrc_to_srt_auto(self, media_path):

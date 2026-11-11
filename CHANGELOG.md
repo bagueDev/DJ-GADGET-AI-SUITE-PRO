@@ -61,6 +61,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Letzter Ton ging verloren**, wenn das Audio mitten im Ton endet – behoben.
 - „No notes detected" und andere Converter-Fehler erscheinen jetzt im Log-Tab.
 
+### 🔎 Verschluckte Fehler sichtbar gemacht (📝)
+- **Zentrale Warnungen im Log-Tab** – neuer Logger `djgadget` mit Handler in `main.py`; Module ohne Zugriff auf die Oberfläche (`helpers.py`, `melody_generator.py`) und Worker-Threads können damit Meldungen in den Log-Tab schreiben.
+- **18 von 50 stillen `except`-Stellen melden sich jetzt**, ohne dass sich das Verhalten ändert: Ordner konnte nicht angelegt werden (AI_Models, Offline_Models, Whisper_Models, Chat_History, Config), `chat_server.json` nicht les-/schreibbar, Drum-Sample defekt (Synthese als Ersatz), Player (nächster Track, Spulen, Loop-Anzeige), BPM ×2 / ÷2, unlesbarer LRC-Zeitstempel beim SRT-Export, Tag-Schreibfehler im Analyzer-Unterprozess (stderr).
+- Die übrigen 31 sind bewusst still (fehlende Tags oder Cover, Abfragen beim Start, Aufräumen, Schutz von GUI-Aufrufen).
+
 ### 🔄 Playlist-Update – Fixes (🔍)
 - **Update nach Export fand nie eine Datei** – undefinierte Variable wurde von `except: pass` verschluckt; Export und Update nutzen jetzt denselben `safe_playlist_name()`.
 - **Rückfrage + Backup** – vor dem Überschreiben erscheint eine Ja/Nein-Abfrage mit Dateien und Track-Anzahl (inkl. Warnung bei aktivem Filter); die alte Version wird als `<datei>.bak` gesichert.

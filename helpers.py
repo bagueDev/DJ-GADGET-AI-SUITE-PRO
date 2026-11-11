@@ -11,6 +11,10 @@ import platform
 import subprocess
 import json
 import shutil
+import logging
+
+# Warnungen landen über den Handler in main.py im Log-Tab
+log = logging.getLogger("djgadget")
 import mutagen
 import urllib.parse
 import tkinter as tk              # Das normale Tkinter (für Menüs)
@@ -88,8 +92,8 @@ def get_config_dir():
     """Verzeichnis für App-Config (cross-platform, immer beschreibbar)."""
     try:
         os.makedirs(CONFIG_DIR, exist_ok=True)
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("Could not create config folder %s: %s", CONFIG_DIR, e)
     return CONFIG_DIR
 
 
@@ -105,7 +109,8 @@ def get_llama_server_override():
         if p and os.path.isfile(p):
             return p
         return None
-    except Exception:
+    except Exception as e:
+        log.warning("Could not read %s, using the bundled llama-server: %s", CONFIG_FILE, e)
         return None
 
 
@@ -124,7 +129,8 @@ def set_llama_server_override(path):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True
-    except Exception:
+    except Exception as e:
+        log.warning("Could not write %s: %s", CONFIG_FILE, e)
         return False
 
 
@@ -139,13 +145,14 @@ def clear_llama_server_override():
         if not data:
             try:
                 os.remove(CONFIG_FILE)
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("Could not delete %s: %s", CONFIG_FILE, e)
         else:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         return True
-    except Exception:
+    except Exception as e:
+        log.warning("Could not update %s: %s", CONFIG_FILE, e)
         return False
 
 
