@@ -709,9 +709,12 @@ class DJApp(ctk.CTk):
         
         def open_license():
             import os
-            license_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "LICENSE")
+            # In der gebauten App liegen die mitgelieferten Dateien unter sys._MEIPASS
+            base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+            license_path = os.path.join(base_dir, "LICENSE")
             if os.path.exists(license_path):
-                os.system(f'open "{license_path}"')
+                # -t: im Texteditor öffnen (die Datei hat keine Endung)
+                os.system(f'open -t "{license_path}"')
             else:
                 messagebox.showinfo("License", "LICENSE file not found.\nSee https://www.gnu.org/licenses/gpl-3.0.html")
         

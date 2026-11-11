@@ -48,6 +48,8 @@ echo -e "${GREEN}🔨 Baue Single-Binary-App...${NC}"
     --add-data "melody_generator.py:." \
     --add-data "samples:samples" \
     --add-data "llama_server_bin:llama_cpp_server" \
+    --add-data "LICENSE:." \
+    --add-data "THIRD_PARTY_LICENSES.md:." \
     --collect-all "demucs" \
     --collect-all "demucs_mlx" \
     --collect-all "mlx" \
@@ -102,6 +104,9 @@ rm -f "$DMG_PATH"
 
 mkdir -p dist/dmg_root
 cp -R "$DEST_APP" dist/dmg_root/
+# Lizenztexte gehören zum Download (GPLv3 + Lizenzen der verwendeten Bibliotheken)
+cp LICENSE dist/dmg_root/LICENSE.txt
+cp THIRD_PARTY_LICENSES.md dist/dmg_root/THIRD_PARTY_LICENSES.md
 ln -s /Applications dist/dmg_root/Applications
 hdiutil create -volname "$APP_NAME" -srcfolder dist/dmg_root -ov -format UDZO "$DMG_PATH"
 rm -rf dist/dmg_root
