@@ -55,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **🎚 Full mix (whole song)** – trennt vor der Erkennung Schlag- und Ton-Anteil (HPSS). Bei kompletten Mixen deutlich besser (House: 17/31 Kicks mit 21 falschen → 31/31 mit 2 falschen), bei trockenen Loops schlechter (0 → 40 falsche Kicks), deshalb als Schalter und standardmäßig aus.
 - **Automatisches BPM nachgeschärft** – das grob erkannte Tempo wird an den gefundenen Einsätzen ausgerichtet (Klicktrack 174: 172,27 → 174,07) und gegen typische Verwechslungen (×1,5, ×4/3) geprüft. Halbes/doppeltes Tempo bleibt mehrdeutig.
 - **Melody: wiederholte gleiche Töne** werden an deutlichen neuen Anschlägen getrennt (Test: 37 → 40 von 40 Tönen), solange Smooth aus ist.
-- **Rückfrage vor dem Überschreiben** einer vorhandenen `<name>_extracted.mid`.
+- **Rückfrage, wenn `<name>_extracted.mid` schon existiert** – Yes überschreibt, No öffnet einen Speichern-Dialog mit dem nächsten freien Namen (`…_extracted_2.mid`) als Vorschlag, Cancel bricht ab.
 - **Letzter Ton ging verloren**, wenn das Audio mitten im Ton endet – behoben.
 - „No notes detected" und andere Converter-Fehler erscheinen jetzt im Log-Tab.
 

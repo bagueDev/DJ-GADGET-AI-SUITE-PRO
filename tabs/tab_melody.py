@@ -908,12 +908,25 @@ class MelodyTab(ctk.CTkFrame):
             if bpm: bpm_source = "analyzer"
 
         out_path = os.path.splitext(fpath)[0] + "_extracted.mid"
-        # Vorhandene Datei nicht stillschweigend überschreiben
+        # Vorhandene Datei nicht stillschweigend überschreiben:
+        # Yes = überschreiben, No = unter anderem Namen speichern, Cancel = abbrechen
         if os.path.exists(out_path):
-            ok = messagebox.askyesno("Overwrite?", f"{os.path.basename(out_path)} already exists.\n\nOverwrite it?")
+            choice = messagebox.askyesnocancel(
+                "File exists",
+                f"{os.path.basename(out_path)} already exists.\n\n"
+                "Yes = overwrite it\nNo = save under a different name\nCancel = do nothing")
+            if choice is False:
+                # Nächsten freien Namen vorschlagen (…_extracted_2.mid, _3, …)
+                base = os.path.splitext(out_path)[0]
+                n = 2
+                while os.path.exists(f"{base}_{n}.mid"):
+                    n += 1
+                out_path = filedialog.asksaveasfilename(
+                    title="Save MIDI as", defaultextension=".mid", filetypes=[("MIDI", "*.mid")],
+                    initialdir=os.path.dirname(out_path), initialfile=os.path.basename(f"{base}_{n}.mid"))
             self.app.lift()
             self.app.focus_force()
-            if not ok:
+            if choice is None or not out_path:
                 return
 
         full_mix = bool(self.midi_full_mix.get())

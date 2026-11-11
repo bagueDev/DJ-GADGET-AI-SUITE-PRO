@@ -136,7 +136,7 @@ Der Converter arbeitet mit festen Regeln, nicht mit einem trainierten KI-Modell.
 
 **Was du erwarten kannst (Drums):** Kicks werden bei trockenen Loops meist vollständig gefunden. Ein Clap oder eine Snare genau auf einer Kick wird oft nur als Kick erkannt, leise Zwischen-Hats fehlen meist. In einem ganzen Lied können Bass-Einsätze als Kick und Gesang als Snare auftauchen.
 
-**Ausgabe:** `<name>_extracted.mid` neben dem Original; vor dem Überschreiben fragt die App nach. Ohne Grid ist Takt 1 der Anfang der Audiodatei.
+**Ausgabe:** `<name>_extracted.mid` neben dem Original. Gibt es die Datei schon, fragt die App: **Yes** überschreibt, **No** lässt dich einen anderen Namen und Ort wählen (vorgeschlagen wird der nächste freie Name, z. B. `…_extracted_2.mid`), **Cancel** bricht ab. Ohne Grid ist Takt 1 der Anfang der Audiodatei.
 
 ## 8. Transcriber 📝
 
