@@ -274,12 +274,33 @@ class EditorTab(ctk.CTkFrame):
             self.entry_track.get() or "0"   # <--- NEU: Track Nummer
         ])
         
+        saved_file = self.current_editor_file
+
         def run():
-            subprocess.run(args)
-            self.after(0, lambda: self.lbl_status.configure(text="✅ Saved!", text_color="green"))
-            self.app.lift()
-            self.app.focus_force()
-            self.after(0, lambda: self.update_info_window(self.current_editor_file))
+            # Ergebnis des Hilfsprozesses auswerten – früher stand hier immer "Saved",
+            # auch wenn das Schreiben fehlgeschlagen war.
+            try:
+                res = subprocess.run(args, capture_output=True, text=True)
+                ok = res.returncode == 0 and "TAG_OK" in (res.stdout or "")
+                notes = [l.strip() for l in (res.stderr or "").splitlines() if l.strip().startswith("Tag ")]
+            except Exception as e:
+                ok, notes = False, [f"Tag error: could not start the tag writer: {e}"]
+
+            def finish():
+                name = os.path.basename(saved_file)
+                for line in notes:
+                    self.app.log_tab.log(f"⚠️ {line}")
+                if ok:
+                    self.lbl_status.configure(text="✅ Saved!", text_color="green")
+                else:
+                    self.lbl_status.configure(text="❌ Save failed (see Log)", text_color="red")
+                    if not notes:
+                        self.app.log_tab.log(f"❌ Tags could not be saved: {name}")
+                self.app.lift()
+                self.app.focus_force()
+                self.update_info_window(saved_file)
+
+            self.after(0, finish)
             
         threading.Thread(target=run, daemon=True).start()
 

@@ -52,6 +52,9 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
         from mutagen.id3 import TIT2, TPE1, TALB, TBPM, TKEY, TRCK
         ext = os.path.splitext(file_path)[1].lower()
         def clean(val): return val if val != "NONE" else ""
+        if not os.path.isfile(file_path):
+            print(f"Tag error: file not found: {file_path}", file=sys.stderr)
+            return False
         img_data = None
         mime_type = "image/jpeg"
         if cover_path and cover_path != "NONE" and os.path.exists(cover_path):
@@ -60,7 +63,7 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
 
         if ext == '.mp3':
             try: tags = ID3(file_path)
-            except: tags = ID3()
+            except ID3NoHeaderError: tags = ID3()   # Datei hat noch keine Tags
             if clean(artist): tags.add(TPE1(encoding=3, text=clean(artist)))
             if clean(title): tags.add(TIT2(encoding=3, text=clean(title)))
             if clean(album): tags.add(TALB(encoding=3, text=clean(album)))
@@ -72,12 +75,28 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
         elif ext == '.flac':
             audio = FLAC(file_path)
             if clean(artist): audio['artist'] = clean(artist)
+            # Neu geschriebene Felder: nur wenn wirklich Text drin steht. Der Editor schickt für
+            # leere Felder ein Leerzeichen – damit soll kein vorhandener Titel überschrieben werden.
+            if clean(title).strip(): audio['title'] = clean(title)
+            if clean(album).strip(): audio['album'] = clean(album)
+            if img_data:
+                pic = Picture()
+                pic.type, pic.mime, pic.desc, pic.data = 3, mime_type, u'Cover', img_data
+                audio.clear_pictures()
+                audio.add_picture(pic)
             if clean(bpm): audio['bpm'] = clean(bpm)
             if clean(camelot): audio['initialkey'] = clean(camelot)
             if clean(track): audio['tracknumber'] = clean(track)
             audio.save()
         elif ext == '.m4a':
             audio = MP4(file_path)
+            # (wie bei FLAC: leere Felder überschreiben nichts)
+            if clean(artist).strip(): audio['\xa9ART'] = clean(artist)
+            if clean(title).strip():  audio['\xa9nam'] = clean(title)
+            if clean(album).strip():  audio['\xa9alb'] = clean(album)
+            if img_data:
+                fmt = MP4Cover.FORMAT_PNG if mime_type == "image/png" else MP4Cover.FORMAT_JPEG
+                audio['covr'] = [MP4Cover(img_data, imageformat=fmt)]
             if clean(bpm): 
                 try: audio['tmpo'] = [int(float(clean(bpm)))]
                 except Exception as e: print(f"Tag warning: BPM {bpm!r} not written to {file_path}: {e}", file=sys.stderr)
@@ -96,9 +115,14 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
             if clean(camelot): audio.tags.add(TKEY(encoding=3, text=clean(camelot)))
             if clean(track):  audio.tags.add(TRCK(encoding=3, text=clean(track)))
             if img_data:
-                from mutagen.id3 import APIC
+                # (APIC kommt aus dem Import am Dateianfang. Ein Import HIER machte APIC zur
+                # lokalen Variable der ganzen Funktion – der MP3-Zweig oben stürzte dadurch
+                # mit Cover ab, und der Fehler wurde verschluckt.)
                 audio.tags.add(APIC(encoding=3, mime=mime_type, type=3, desc=u'Cover', data=img_data))
             audio.save(v2_version=3)
+        else:
+            print(f"Tag error: {ext or 'this file type'} is not supported for tag writing ({file_path})", file=sys.stderr)
+            return False
         return True
     except Exception as e:
         print(f"Tag error: could not write tags to {file_path}: {type(e).__name__}: {e}", file=sys.stderr)
@@ -167,8 +191,8 @@ def analyze_track(file_path, do_write_tags=False, min_bpm=0, max_bpm=999):
         # --- TAGGING ---
         tag_status = "-"
         if str(do_write_tags) == "True" and camelot != "-" and bpm_rounded > 0:
-            write_metadata(str(file_path), "NONE", "NONE", "NONE", "NONE", bpm_str, f"{detected_note} {mode}", camelot)
-            tag_status = "Saved"
+            ok = write_metadata(str(file_path), "NONE", "NONE", "NONE", "NONE", bpm_str, f"{detected_note} {mode}", camelot)
+            tag_status = "Saved" if ok else "Failed"
 
         # --- ZEIT-STRING FÜR DIE LISTE ---
         secs = int(total_duration)
@@ -199,8 +223,16 @@ def main_worker():
 
     if args[0] == "--tag":
         if len(args) >= 8:
-            write_metadata(args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8] if len(args) > 8 else "NONE", args[9] if len(args) > 9 else "0")
-            print("✅ TAG_OK")
+            ok = write_metadata(args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8] if len(args) > 8 else "NONE", args[9] if len(args) > 9 else "0")
+            if ok:
+                print("✅ TAG_OK")
+            else:
+                print("❌ TAG_FAILED")
+                sys.exit(1)  # der Editor zeigt dann "Save failed" statt "Saved"
+        else:
+            print("Tag error: too few arguments for --tag", file=sys.stderr)
+            print("❌ TAG_FAILED")
+            sys.exit(1)
     else:
         if len(args) >= 2:
             input_path = Path(args[0])

@@ -67,7 +67,8 @@ Die App ist portabel — lege sie mit diesen Ordnern zusammen ab (fehlende Ordne
 ## 5. Metadata Editor ✏️
 
 - Links Liste, rechts Live-Vorschau (Cover + Tags); ℹ️ More/Raw-Data-Fenster mit Bitrate/ISRC/Encoder (aktualisiert live).
-- Cover tauschen (JPG/PNG, auch WAV/AIFF); Artist/Title/Album (+ BPM/Key/Camelot/Track) bearbeiten; 💾 SPEICHERN schreibt permanent (ID3v2.3).
+- Cover tauschen (JPG/PNG) und Artist/Title/Album (+ BPM/Key/Camelot/Track) bearbeiten, in allen Formaten: MP3, FLAC, M4A, WAV, AIFF. 💾 SPEICHERN schreibt permanent (MP3/WAV/AIFF als ID3v2.3).
+- Nach dem Speichern steht **✅ Saved!** oder **❌ Save failed (see Log)**. Im zweiten Fall nennt der Log-Tab den Grund, zum Beispiel schreibgeschützte oder beschädigte Datei.
 - Rechtsklick: Copy/Paste in allen Feldern; Sync aus Analyzer (T).
 
 ## 6. Stems AI ✂️ (Stand v3.3)

@@ -274,9 +274,16 @@ class ChatTab(ctk.CTkFrame):
 
     def clear_server_binary(self):
         try:
-            clear_llama_server_override()
-        except Exception:
-            pass
+            removed = clear_llama_server_override()
+        except Exception as e:
+            log.warning("Could not remove the server override: %s", e)
+            removed = False
+        if not removed:
+            # Nicht "entfernt" melden, wenn die Einstellung noch in der Datei steht
+            messagebox.showerror("Fehler", "Override konnte nicht entfernt werden.\nDetails stehen im Log-Tab.")
+            self.app.lift()
+            self.app.focus_force()
+            return
         self.chat_server_entry.delete(0, "end")
         self.lbl_server_status.configure(text="Standard (gebündelt)", text_color="gray")
         messagebox.showinfo("Info", "Override entfernt — nutzt wieder die gebündelte Binary.")

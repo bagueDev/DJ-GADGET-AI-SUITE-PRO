@@ -905,6 +905,18 @@ class AnalyzeTab(ctk.CTkFrame):
         try:
             # Subprozess starten
             p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+
+            # Fehlerausgabe des Analyzers mitlesen: Tag-Meldungen kommen ins Log. Ohne das
+            # Mitlesen bliebe der Prozess hängen, sobald die Pipe voll ist.
+            def _drain_stderr(pipe):
+                try:
+                    for line in pipe:
+                        line = line.strip()
+                        if line.startswith("Tag "):
+                            self.after(0, lambda x=line: self.app.log_tab.log(f"⚠️ {x}"))
+                except Exception:
+                    pass  # Pipe wurde beim Abbruch geschlossen
+            threading.Thread(target=_drain_stderr, args=(p.stderr,), daemon=True).start()
             
             while True:
                 # Abbruch-Check (User hat Stop gedrückt oder App schließt)

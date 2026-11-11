@@ -61,6 +61,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Letzter Ton ging verloren**, wenn das Audio mitten im Ton endet – behoben.
 - „No notes detected" und andere Converter-Fehler erscheinen jetzt im Log-Tab.
 
+### ✏️ Metadata Editor & Auto-Tag – ehrliche Rückmeldung, fehlende Felder (✏️)
+- **MP3 mit neuem Cover wurde nie gespeichert** – ein Import mitten in der Funktion ließ den MP3-Zweig abstürzen, sobald ein Cover dabei war; der Fehler wurde verschluckt und der Editor zeigte trotzdem „Saved". Es wurde dann gar nichts geschrieben, auch nicht Artist oder Titel. Behoben.
+- **FLAC:** Titel, Album und Cover werden jetzt geschrieben (bisher nur Artist, BPM, Key, Track).
+- **M4A:** Artist, Titel, Album und Cover werden jetzt geschrieben (bisher nur BPM, Key, Track). Leere Felder überschreiben bei diesen neu geschriebenen Feldern nichts.
+- **„❌ Save failed (see Log)" statt immer „✅ Saved!"** – der Editor wertet das Ergebnis des Tag-Prozesses aus; der Grund (schreibgeschützt, beschädigt, nicht unterstütztes Format, Datei fehlt) steht im Log-Tab.
+- **Auto-Tag beim Scan** trägt „Failed" statt „Saved" ein, wenn BPM/Key nicht geschrieben werden konnten; die Meldungen des Analyzer-Prozesses erscheinen im Log-Tab. Dessen Fehlerausgabe wird jetzt mitgelesen (vorher konnte der Scan an einer vollen Pipe hängen bleiben).
+- Nicht unterstützte Dateitypen und fehlende Dateien gelten als Fehler statt als stiller Erfolg; eine fehlende MP3 wird nicht mehr als leere Datei angelegt.
+- Chat: „Override entfernt" erscheint nur noch, wenn die Server-Einstellung wirklich entfernt wurde.
+
 ### 🔎 Verschluckte Fehler sichtbar gemacht (📝)
 - **Zentrale Warnungen im Log-Tab** – neuer Logger `djgadget` mit Handler in `main.py`; Module ohne Zugriff auf die Oberfläche (`helpers.py`, `melody_generator.py`) und Worker-Threads können damit Meldungen in den Log-Tab schreiben.
 - **18 von 50 stillen `except`-Stellen melden sich jetzt**, ohne dass sich das Verhalten ändert: Ordner konnte nicht angelegt werden (AI_Models, Offline_Models, Whisper_Models, Chat_History, Config), `chat_server.json` nicht les-/schreibbar, Drum-Sample defekt (Synthese als Ersatz), Player (nächster Track, Spulen, Loop-Anzeige), BPM ×2 / ÷2, unlesbarer LRC-Zeitstempel beim SRT-Export, Tag-Schreibfehler im Analyzer-Unterprozess (stderr).
