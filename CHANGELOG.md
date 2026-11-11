@@ -22,6 +22,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Verse/Chorus** – je Energie-Stufe des Arrangements ein eigenes Motiv-Paar (Verse: kürzere Töne, reduzierter Tonvorrat; Chorus: längere Töne, volle Skala). Atempause und Mute-Regeln der Arrangements unverändert.
 - Density, Swing, Humanize, Triads-Mode und Seed wirken wie bisher; der alte Zufalls-Modus bleibt im Backend über `motif=False` erreichbar.
 
+### 🥁 Drums – Fixes & DnB-Groove (🎹)
+- **Letzter Takt fehlte im Audio** – ein Schlag wurde komplett weggelassen, wenn sein Sample über das Dateiende ragte (Snare 1,37 s = ein ganzer Takt bei 174 BPM). Jetzt wird nur der Ausklang abgeschnitten, mit 10 ms Fade am Dateiende. Betraf WAV, Vorschau und Full-Loop-Mix aller Genres; MIDI war korrekt.
+- **Techno / House / Synthpop spielten zwei Schlagzeuge** – nach dem eigenen Muster lief zusätzlich der „Standard 4/4"-Zweig (doppelte Kicks, ungewollte Snare auf 2+4, Synthpop-Kickmuster überdeckt). Kette repariert; Techno bekommt stattdessen einen dezenten Clap auf 2 und 4.
+- **Reggaeton war identisch mit Reggae** (`"Reggae" in "Reggaeton"`) – das Dembow-Muster wird jetzt erreicht. Reggae hat erstmals Hi-Hats (8tel, Offbeat betont).
+- **Kein Dauer-Ride mehr** – Techno, House, Oriental und Ambient spielten im Infinite-Loop durchgehend 16tel auf dem Ride. Jetzt feste Hat-Muster je Genre (House/Techno: offene Hat auf den Offbeats); Ride nur noch im Refrain eines Arrangements.
+- **DnB: 8-Takt-Sektionen** – der 2-Takt-Groove bleibt stehen (`A B A B'`), Takt 4 ist der Turnaround (Extra-Kick auf der 4-und + Ghost), Takt 8 der Fill; erst danach wird neu gewürfelt.
+- **DnB: Hats als Muster** – drei Varianten (Rolling 16ths, Shuffle, Straight 8ths) plus feste Open-Hat-Positionen pro Sektion; Density dünnt das Muster aus, statt in jedem Takt andere Löcher zu würfeln.
+- **DnB/Rolling: Ghost-Snares** um die Hauptschläge (ab Density 40) und **Snare-Wirbel statt Tom-Fill** für beide DnB-Varianten.
+- **Bass rastet auf die Kick ein (Full Loop)** – bei DnB, Trap und HipHop spielt der Bass mit den Stilen „Steady" und „Busy" genau auf den Kick-Positionen der Drums (eine Note pro Kick, gehalten bis zur nächsten; Trap als lange 808, DnB als kurze Sub-Stöße). Vorher lagen nur 50–86 % der Bass-Einsätze auf einer Kick und 28–50 % der Kicks hatten eine Bassnote, jetzt jeweils 100 %. Feste Bass-Patterns (Neuro Roller, Dembow …) und House/Techno/Reggae/Jazz bleiben unverändert.
+- Jazz-Comping wird pro Takt statt pro Schritt gewürfelt; Humanize-Jitter gilt pro Schlag und summiert sich nicht mehr auf.
+
 ### 🎼 Melody Lab – Generator-Fixes (🎹)
 - **Melodie klebte am oberen Rand** – die „Magnet"-Logik wählte fast immer den Ton darüber; ab Takt 3 lagen 87–97 % der Noten ganz oben. Jetzt hat der gewürfelte Ton Vorrang, Nachbartöne sind Ausweichtöne in zufälliger Reihenfolge (7–12 % am Rand, mehr verschiedene Töne, voller Tonbereich).
 - **7 Progression-Presets ohne Rezept** – „Pop Anthem" und „Classic House" scheiterten an einem Leerzeichen, die fünf Reggae-Presets fehlten im Backend ganz und liefen still als „Random". Neuer toleranter Lookup `resolve_progression()` (ignoriert Emojis/Leerzeichen), Reggae-Rezepte ergänzt – 43/43 Presets greifen.

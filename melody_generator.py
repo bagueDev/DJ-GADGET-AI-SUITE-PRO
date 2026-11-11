@@ -36,6 +36,10 @@ def get_last_progression():
     """Progression, die der letzte Full Loop dieses Threads tatsächlich benutzt hat."""
     return getattr(_tls, "progression", None)
 
+def get_last_kick_steps():
+    """Kick-Positionen (absolute 16tel-Schritte) des letzten Drum-Laufs dieses Threads."""
+    return getattr(_tls, "kick_steps", None)
+
 def get_last_bpm():
     """BPM, mit dem der letzte audio_to_midi-Lauf dieses Threads geschrieben hat."""
     return getattr(_tls, "bpm", None)
@@ -1243,6 +1247,32 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
         # Zwei feste Amen-Varianten für diesen Klick (wechseln pro Takt)
         amen_a, amen_b = pick_pair(amen_pool)
 
+        # --- DnB-GROOVE: Zutaten, die über eine 8-Takt-Sektion gleich bleiben ---
+        # Hats als festes Muster statt Münzwurf pro Schritt: jede 16tel-Position
+        # (0-3 im Viertel) hat ein Gewicht; Density/Energie legen die Schwelle fest,
+        # ab der eine Position mitspielt. So dünnt Density das Muster aus,
+        # ohne dass die Löcher in jedem Takt woanders sitzen.
+        dnb_hat_pool = [
+            {"name": "Rolling 16ths", "w": [1.0, 0.35, 0.8, 0.3]},
+            {"name": "Shuffle",       "w": [1.0, 0.15, 0.8, 0.6]},
+            {"name": "Straight 8ths", "w": [1.0, 0.1, 0.85, 0.1]},
+        ]
+        dnb_ghost_pool = [[7], [9], [7, 9], [15], [9, 15], [7, 15]]   # leise Snares um die Hauptschläge
+        dnb_open_pool = [[10], [14], [6, 14], [2, 10]]                # offene Hat (Offbeats)
+
+        def roll_dnb_section():
+            return random.choice(dnb_hat_pool), random.choice(dnb_ghost_pool), random.choice(dnb_open_pool)
+        dnb_hat, dnb_ghost, dnb_open = roll_dnb_section()
+        is_dnb = "DnB" in genre
+
+        # Hat-Muster für Genres ohne eigene Hat-Logik: (Note, Velocity, Gewicht) je 16tel-Position
+        fallback_hats = {
+            "House":  [(42, 70, 0.45), (42, 55, 0.25), (46, 105, 1.0), (42, 60, 0.3)],   # offene Hat auf dem Offbeat
+            "Techno": [(42, 90, 0.7),  (42, 60, 0.3),  (46, 100, 1.0), (42, 70, 0.4)],
+            "":       [(42, 95, 1.0),  (42, 50, 0.15), (42, 75, 0.8),  (42, 50, 0.15)],  # Standard: 8tel
+        }
+        hat_table = next(v for k, v in fallback_hats.items() if k in genre)
+
         # --- 4. GENRE LOGIK (Vollständiges Drumset & Transition-Logik) ---
         total_steps = int(bars) * steps_per_bar
         events = [] 
@@ -1259,7 +1289,15 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
             # --- 1b. PHRASEN-WECHSEL: alle 2 Takte frische Muster würfeln,
             # damit lange Loops nicht ABABABAB klingen (gleiche Engine-Reihenfolge
             # wie unten: Breakbeat vor DnB prüfen!)
-            if bar > 0 and bar % 2 == 0 and random.random() < 0.6:
+            # DnB: der 2-Takt-Groove bleibt eine ganze 8-Takt-Sektion stehen (A B A B'),
+            # erst danach wird (mit 50 %) neu gewürfelt.
+            if is_dnb:
+                reroll = bar > 0 and bar % 8 == 0 and random.random() < 0.5
+                if reroll:
+                    dnb_hat, dnb_ghost, dnb_open = roll_dnb_section()
+            else:
+                reroll = bar > 0 and bar % 2 == 0 and random.random() < 0.6
+            if reroll:
                 if "Techno" in genre:
                     tp_a, tp_b = pick_pair(tech_pool)
                 elif "House" in genre:
@@ -1292,7 +1330,12 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                 events.append((bar_start, 49, 127)) # Max Power Crash
 
             # Ride-Becken statt Hi-Hat bei hoher Energie (Refrain-Feeling)
-            use_ride = (energy >= 0.8)
+            # (im Infinite-Loop ist die Energie immer 1.0 – dort bleibt es bei Hi-Hats)
+            use_ride = (energy >= 0.8) and "Infinite" not in arr_mode
+            # Jazz: eine Comping-Figur pro Takt
+            current_comp = random.choice(jazz_comp_pool) if "Jazz" in genre else []
+            # DnB: jeder 4. Takt ist der Turnaround (Extra-Kick auf der 4-und, Ghost davor)
+            is_turnaround = is_dnb and bar % 4 == 3
 
             # --- 4. STEP-SCHLEIFE (Rhythmus-Generierung) ---
             for step_in_bar in range(steps_per_bar):
@@ -1317,8 +1360,8 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
 
                 # C: ÜBERGANGS-FILLS (Toms alle 8 Takte, bei Breakbeat Amen-Rat-a-tat)
                 if is_fill_bar and step_in_bar >= (steps_per_bar - 4):
-                    if "Breakbeat" in genre:
-                        # Amen-Style Snare-Roll am Taktende (Crescendo)
+                    if is_dnb:
+                        # Snare-Roll am Taktende (Crescendo) statt Toms
                         events.append((step, 38, int(95 + (step_in_bar - 12) * 8)))
                     elif energy >= 0.4:
                         tom_note = 50 if step_in_bar == 12 else (47 if step_in_bar == 14 else 45)
@@ -1334,6 +1377,9 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                         events.append((step, 36, 125 if step_in_bar == 0 else 115))
                     if step_in_bar in current_tp["p"] and energy >= 0.6 and random.random() < prob:
                         events.append((step, 37, random.randint(80, 100)))
+                    # Dezenter Clap auf 2 und 4
+                    if step_in_bar in [4, 12] and energy >= 0.5:
+                        events.append((step, 39, 95))
 
                 # 2. HOUSE
                 elif "House" in genre:
@@ -1365,8 +1411,12 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                         events.append((step, 46, 90))
 
                 # 4a. DNB / BREAKBEAT (Amen Break Engine: Ghosts, Flam, "phat" 4)
-                if "Breakbeat" in genre:
+                elif "Breakbeat" in genre:
                     current_amen = amen_a if bar % 2 == 0 else amen_b
+                    if is_turnaround:
+                        current_amen = dict(current_amen,
+                                            kick=sorted(set(current_amen["kick"]) | {14}),
+                                            ghost=sorted(set(current_amen["ghost"]) | {15}))
                     # Kick (die 4 wird von der Snare unterstützt = "phat")
                     if step_in_bar in current_amen["kick"] and energy >= 0.3:
                         events.append((step, 36, 122 if step_in_bar == 0 else 108))
@@ -1379,8 +1429,8 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                     # Flam/Ghost direkt vor der 4 (Schritt 11)
                     if step_in_bar == 11 and energy >= 0.6 and random.random() < 0.6:
                         events.append((step, 40, 45))
-                    # 16tel-Hats mit Akzenten + Open Hats auf Offbeats
-                    if random.random() < (prob * energy):
+                    # Hats als Muster mit Akzenten + Open Hats auf Offbeats
+                    if dnb_hat["w"][step_in_bar % 4] > 1.0 - (prob * energy):
                         v_hat = 118 if step_in_bar % 4 == 0 else (55 if step_in_bar % 4 == 2 else 80)
                         n_hat = 46 if step_in_bar in current_amen["open"] else 42
                         events.append((step, n_hat, v_hat))
@@ -1388,16 +1438,20 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                 # 4. DRUM AND BASS (Rolling & Simon V)
                 elif "DnB" in genre:
                     current_kick_pattern = p_a if bar % 2 == 0 else p_b
+                    if is_turnaround:
+                        current_kick_pattern = sorted(set(current_kick_pattern) | {14})
                     if step_in_bar in current_kick_pattern and energy >= 0.3:
                         events.append((step, 36, 120 if step_in_bar == 0 else 105))
                     if step_in_bar in [4, 12] and energy >= 0.5:
                         events.append((step, 38, 120)) 
-                    # Rolling Hats (SampleFocus Style)
+                    # Ghost-Snares (leise, feste Positionen pro Sektion; ab Density 40)
+                    if energy >= 0.6 and prob >= 0.4 and (step_in_bar in dnb_ghost or (is_turnaround and step_in_bar == 15)):
+                        events.append((step, 40, random.randint(35, 55)))
+                    # Rolling Hats als festes Muster (Density dünnt aus)
                     pos_in_quad = step_in_bar % 4
                     dnb_v_pattern = [115, 45, 85, 40]
-                    if random.random() < (prob * energy):
-                        is_offbeat = step_in_bar in [2, 6, 10, 14]
-                        n_hat = 46 if (is_offbeat and random.random() < 0.3) else 42
+                    if dnb_hat["w"][pos_in_quad] > 1.0 - (prob * energy):
+                        n_hat = 46 if step_in_bar in dnb_open else 42
                         events.append((step, n_hat, dnb_v_pattern[pos_in_quad]))
 
                 # 5. HIPHOP / TRAP
@@ -1428,11 +1482,14 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                 # 6. REGGAE / ORIENTAL / JAZZ (Analog zu den Vorlagen weiterführen...)
                 # ... (Hier deine restlichen Genres einfügen) ...
                 # 6. REGGAE
-                elif "Reggae" in genre:
+                elif "Reggae" in genre and "Reggaeton" not in genre:
                     if step_in_bar in rp["k"] and energy >= 0.3:
                         events.append((step, 36, 120))
                     if step_in_bar in rp["s"] and energy >= 0.5:
                         events.append((step, 37, 115))
+                    # 8tel-Hats mit Betonung auf dem Offbeat (Skank-Feeling)
+                    if step_in_bar % 2 == 0 and energy >= 0.4 and [0.9, 1.0][step_in_bar % 4 == 2] > 1.0 - prob:
+                        events.append((step, 42, 100 if step_in_bar % 4 == 2 else 65))
                 # 8. ORIENTAL
                 elif "Oriental" in genre:
                     if step_in_bar in op["k"] and energy >= 0.3:
@@ -1471,7 +1528,6 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                     
                     # 5. INDEPENDENT COMPING (Snare-Variationen)
                     # Wir wählen für jeden Takt eine Figur aus dem UAH-Pool
-                    current_comp = random.choice(jazz_comp_pool)
                     if step_in_bar in current_comp and energy >= 0.6 and random.random() < prob:
                         # Akzentuierte Snare (38) oder Snare 2 (40) für Ghost-Vibe
                         events.append((step, random.choice([38, 40]), random.randint(75, 100)))
@@ -1500,10 +1556,16 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                 genres_with_custom_hats = ["Jazz", "DnB", "Reggae", "Reggaeton", "Trap", "HipHop", "Synthpop"]
                 
                 if not any(g in genre for g in genres_with_custom_hats):
-                    if random.random() < (prob * energy):
-                        # Nutzt Ride (51) bei hoher Energie, sonst Closed Hat (42)
-                        hat_n = 51 if (use_ride and energy > 0.7) else 42
-                        events.append((step, hat_n, int(100 * energy)))                   
+                    hat_n, hat_v, hat_w = hat_table[step_in_bar % 4]
+                    if hat_w > 1.0 - (prob * energy):
+                        # Ride (51) statt Closed Hat im Refrain eines Arrangements – nur auf den 8teln
+                        if use_ride and hat_n == 42 and "House" not in genre and "Techno" not in genre:
+                            hat_n = 51 if step_in_bar % 2 == 0 else None
+                        if hat_n is not None:
+                            events.append((step, hat_n, int(hat_v * (0.6 + 0.4 * energy))))
+        # Kick-Positionen für den Bass merken (Full Loop koppelt den Bass daran)
+        _tls.kick_steps = sorted({st for st, note, vel in events if note == 36 and vel >= 60})
+
         # --- 5. MIDI & AUDIO TIMING (Swing & Humanize) ---
         timeline = {}
         for step, note, vel in events:
@@ -1561,13 +1623,16 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                     else:
                         sample = drum_sounds.get(note)
                     if sample is not None:
+                        hit_start = start_sample
                         if human:
-                            # ±5ms Timing-Streuung (menschlicher Groove)
-                            start_sample = max(0, start_sample + random.randint(-220, 220))
+                            # ±5ms Timing-Streuung pro Schlag (menschlicher Groove)
+                            hit_start = max(0, start_sample + random.randint(-220, 220))
                         gain = vel / 127.0
-                        end_sample = start_sample + len(sample)
-                        if end_sample < len(audio_buffer):
-                            audio_buffer[start_sample:end_sample] += (sample * gain)
+                        # Ragt der Ausklang über das Dateiende, wird er abgeschnitten –
+                        # der Schlag selbst bleibt hörbar (vorher fiel er komplett weg).
+                        end_sample = min(hit_start + len(sample), len(audio_buffer))
+                        if hit_start < end_sample:
+                            audio_buffer[hit_start:end_sample] += (sample[:end_sample - hit_start] * gain)
                     
                     first = False
                 last_tick = current_tick
@@ -1577,6 +1642,9 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
         
         m = np.max(np.abs(audio_buffer))
         if m > 0: audio_buffer = audio_buffer / m * 0.8
+        # Kurzes Ausblenden am Dateiende, damit abgeschnittene Ausklänge nicht knacken
+        fade = min(len(audio_buffer), int(0.01 * sr))
+        if fade > 0: audio_buffer[-fade:] *= np.linspace(1.0, 0.0, fade)
         sf.write(wav_path, audio_buffer, sr)
 
         return wav_path, mid_path
@@ -1741,7 +1809,10 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
         return False
 
 @_seeded
-def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_style="Steady (Groove)", density=80, swing=0, time_sig="4/4", arr_mode="♾️ Infinite Loop"):
+def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_style="Steady (Groove)", density=80, swing=0, time_sig="4/4", arr_mode="♾️ Infinite Loop", kick_steps=None):
+    """kick_steps: Kick-Positionen der Drums (absolute 16tel-Schritte). Sind sie
+    gegeben, rastet der Bass bei DnB, Trap und HipHop auf die Kicks ein
+    (nur bei den genre-abhängigen Stilen Steady/Busy, nicht bei festen Patterns)."""
     try:
         os.makedirs(output_dir, exist_ok=True)
         wav_path = os.path.join(output_dir, "generated_bass.wav")
@@ -1768,6 +1839,13 @@ def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_styl
 
         # Smart Progression Lookup
         prog_data = resolve_progression(prog)
+
+        # Kick-Kopplung: nur dort, wo Bass und Kick stilistisch zusammengehören.
+        # (House/Reggae spielen den Bass bewusst ZWISCHEN den Kicks, Jazz läuft frei.)
+        couple = bool(kick_steps) and any(g in genre for g in ("DnB", "Trap", "HipHop"))
+        kick_set = sorted(kick_steps) if couple else []
+        # Maximale Notenlänge in 16teln: Trap = lange 808, DnB = kurze Sub-Stöße
+        lock_cap = 12 if "Trap" in genre else (4 if "DnB" in genre else 6)
 
         # 3. RHYTHMUS-ENTSCHEIDUNG (Hard-Grid Wahl)
         events = []
@@ -1804,11 +1882,18 @@ def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_styl
 
             # --- DAS RASTER FINDEN ---
             pattern_to_use = []
+            locked = False  # True = Positionen kommen von der Kick (schon in echten Schritten)
             if current_style in BASS_PATTERNS:
                 pattern_to_use = BASS_PATTERNS[current_style]
             else:
+                bar_kicks = [k - bar_start for k in kick_set if bar_start <= k < bar_start + steps_per_bar]
+                if bar_kicks:
+                    # Eine Bassnote pro Kick, gehalten bis zur nächsten Kick (höchstens lock_cap)
+                    ends = bar_kicks[1:] + [steps_per_bar]
+                    pattern_to_use = [(k, max(1, min(e - k, lock_cap))) for k, e in zip(bar_kicks, ends)]
+                    locked = True
                 # Dynamische Genre-Raster für "Steady" und "Busy"
-                if "House" in genre or "Reggae" in genre:
+                elif "House" in genre or "Reggae" in genre:
                     pattern_to_use = [(2, 2), (6, 2), (10, 2), (14, 2)] # Offbeats
                 elif "Techno" in genre or "Synthpop" in genre:
                     pattern_to_use = [(0, 4), (4, 4), (8, 4), (12, 4)] # Viertel
@@ -1822,9 +1907,10 @@ def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_styl
             # 4. NOTEN IN DEN BAR SCHREIBEN
             for s_pos, s_dur in pattern_to_use:
                 # Position an die Taktlänge anpassen (12 Steps bei 3/4 & 6/8)
-                s_pos_s = int(s_pos * step_scale)
-                # Dichte prüfen (die Eins bleibt fast immer)
-                if random.random() > (prob * energy) and s_pos_s != 0: continue
+                s_pos_s = s_pos if locked else int(s_pos * step_scale)
+                # Dichte prüfen (die Eins bleibt fast immer). Kick-gekoppelte Noten
+                # bleiben alle stehen – sonst reißt die Kopplung an zufälligen Stellen ab.
+                if not locked and random.random() > (prob * energy) and s_pos_s != 0: continue
                 
                 # Note bestimmen (Varianz bei Busy)
                 n = root_n
@@ -1847,8 +1933,11 @@ def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_styl
         audio_buffer = np.zeros(int((total_steps * sec_per_16th + 1.5) * sr))
         T_master = np.linspace(0, len(audio_buffer)/sr, len(audio_buffer), False)
         
+        def _on_tick(st):
+            return st * ticks_per_16th + (int(ticks_per_16th * (swing / 100) * 0.6) if st % 2 != 0 else 0)
+
         last_tick = 0
-        for step, note, vel, dur in events:
+        for ev_i, (step, note, vel, dur) in enumerate(events):
             # Timing mit exakter Swing-Kopie der Drums
             abs_on_tick = step * ticks_per_16th
             abs_on_time = step * sec_per_16th
@@ -1861,6 +1950,9 @@ def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_styl
             # Wir lassen am Ende jeder Note 2 Ticks Platz, damit sich Note-Off 
             # und das neue Note-On niemals überschneiden.
             abs_off_tick = abs_on_tick + (dur * ticks_per_16th) - 2 
+            if ev_i + 1 < len(events):
+                # Bei Swing und engen Abständen nie über den nächsten Einsatz hinaus halten
+                abs_off_tick = max(abs_on_tick + 1, min(abs_off_tick, _on_tick(events[ev_i + 1][0]) - 2))
 
             # MIDI Schreiben
             track.append(Message('note_on', note=note, velocity=vel, time=max(0, abs_on_tick - last_tick), channel=2))
@@ -1921,7 +2013,8 @@ def create_full_loop(root, scale, bpm, bars, time_sig, octave, mode, density, sw
         print("-> Step 3: Generating Bass...")
         _step(3, "🎸 Bass...")
         # Sicherstellen, dass create_bass_files existiert und alle Argumente nimmt!
-        wav_b, mid_b = create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_style, density, swing, time_sig,arr_mode)
+        wav_b, mid_b = create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_style, density, swing, time_sig, arr_mode,
+                                         kick_steps=get_last_kick_steps())
         if _stopped():
             print("⏹ FULL LOOP STOPPED BY USER (nach Bass)")
             return None, None
