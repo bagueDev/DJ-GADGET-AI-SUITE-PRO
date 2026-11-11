@@ -40,6 +40,14 @@ def get_last_kick_steps():
     """Kick-Positionen (absolute 16tel-Schritte) des letzten Drum-Laufs dieses Threads."""
     return getattr(_tls, "kick_steps", None)
 
+def get_last_chords():
+    """Akkordfolge des letzten audio_to_midi-Laufs im Chords-Modus (Liste von Namen)."""
+    return getattr(_tls, "chords", None)
+
+def get_last_key():
+    """Geschätzte Tonart des letzten Chords-Laufs als Paar, z.B. 'A minor / C major'."""
+    return getattr(_tls, "key", None)
+
 def get_last_bpm():
     """BPM, mit dem der letzte audio_to_midi-Lauf dieses Threads geschrieben hat."""
     return getattr(_tls, "bpm", None)
@@ -1669,6 +1677,8 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
     """
     try:
         _tls.bpm = None
+        _tls.chords = None
+        _tls.key = None
         print(f"Converting: {os.path.basename(audio_path)}...")
         
         # 1. Audio laden
@@ -1695,8 +1705,21 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
         events = []  # (Start s, Ende s, Note, Velocity)
         is_drum_mode = False
 
+        mode_l = str(mode).lower()
+        is_chord_mode = "chord" in mode_l
+        tempo_events = None   # Einsätze, an denen das Tempo/Raster ausgerichtet wird (Standard: die Noten)
+        chord_markers = []    # (Start s, Akkordname) für MIDI-Marker
+
+        # --- 0. CHORDS: hier nur die Anschläge fürs Tempo sammeln; die Akkorde selbst
+        #        werden weiter unten bestimmt, wenn Tempo und Beat-Raster feststehen ---
+        if is_chord_mode:
+            o_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=512)
+            o_fr = librosa.onset.onset_detect(onset_envelope=o_env, sr=sr, hop_length=512, backtrack=False, units='frames')
+            o_t = librosa.frames_to_time(o_fr, sr=sr, hop_length=512)
+            tempo_events = [(float(t), 0.0, 0, float(o_env[f])) for f, t in zip(o_fr, o_t)]
+
         # --- A. MELODY (Pitch - PYIN) ---
-        if "melody" in str(mode).lower():
+        elif "melody" in mode_l:
             fmin = librosa.note_to_hz('C2')
             fmax = librosa.note_to_hz('C6')
             # Nur den "Ton"-Anteil analysieren: Schlagzeug stört die Tonhöhen-Erkennung
@@ -1855,10 +1878,12 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
                     events.append((t, t + 0.05, note, int(55 + 70 * min(1.0, st))))
 
         # 3. Schreiben
-        if not events:
+        if not events and not is_chord_mode:
             _tls.error = "No notes detected. Try increasing sensitivity."
             print(f"❌ {_tls.error}")
             return False
+        if tempo_events is None:
+            tempo_events = events
 
         # --- TEMPO: automatisch erkanntes BPM an den Einsätzen nachschärfen ---
         # Gesucht wird im Bereich ±4 % das Tempo, bei dem die Einsätze am besten auf ein
@@ -1868,9 +1893,9 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
             z = np.sum(wgt * np.exp(2j * np.pi * t / g))
             return abs(z) / max(1e-9, float(np.sum(wgt))), float(np.angle(z) / (2 * np.pi) * g)
 
-        ev_t = np.array([e[0] for e in events], dtype=float)
-        ev_w = np.array([e[3] * (2.0 if (is_drum_mode and e[2] == 36) else 1.0) for e in events], dtype=float)
-        if bpm_auto and len(events) >= 8:
+        ev_t = np.array([e[0] for e in tempo_events], dtype=float)
+        ev_w = np.array([e[3] * (2.0 if (is_drum_mode and e[2] == 36) else 1.0) for e in tempo_events], dtype=float)
+        if bpm_auto and len(tempo_events) >= 8:
             # Neben dem Grobwert auch typische Verwechslungen prüfen (z.B. 93 statt 140).
             # Eine Alternative gewinnt nur, wenn sie deutlich besser aufs Raster passt.
             # (Halbes/doppeltes Tempo lässt sich so NICHT unterscheiden – beide passen gleich gut.)
@@ -1893,8 +1918,128 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
         track.append(MetaMessage('set_tempo', tempo=int(round(60_000_000 / bpm))))
         ticks_per_sec = (bpm / 60.0) * mid.ticks_per_beat
 
+        # --- CHORDS: ein Akkord pro halbem Takt, auf dem Beat-Raster ---
+        if is_chord_mode:
+            NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+            beat = 60.0 / bpm
+            # Wo liegen die Beats? Phase aus den Anschlägen (wie beim Raster)
+            phase = 0.0
+            if len(ev_t):
+                z = np.sum(ev_w * np.exp(2j * np.pi * ev_t / beat))
+                phase = float(np.angle(z) / (2 * np.pi) * beat) % beat
+
+            # Nur der Ton-Anteil zählt; Schlagzeug verschmiert die Tonhöhen
+            y_h = librosa.effects.harmonic(y)
+            chroma = librosa.feature.chroma_cqt(y=y_h, sr=sr, hop_length=512)            # alle Oktaven: welche Töne klingen?
+            bass_c = librosa.feature.chroma_cqt(y=y_h, sr=sr, hop_length=512,
+                                                fmin=librosa.note_to_hz('C1'), n_octaves=2)  # Tiefen: Hinweis auf den Grundton
+            fr_t = librosa.times_like(chroma, sr=sr, hop_length=512)
+            rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
+            rms = np.pad(rms, (0, max(0, chroma.shape[1] - len(rms))))[:chroma.shape[1]]
+            loud = float(rms.max()) if len(rms) else 0.0
+
+            # 24 Muster: Dur- und Moll-Dreiklänge auf allen 12 Grundtönen
+            templates = []
+            for r in range(12):
+                for suffix, third in (("", 4), ("m", 3)):
+                    v = np.zeros(12); v[[r, (r + third) % 12, (r + 7) % 12]] = 1.0
+                    templates.append((r, third, NOTE_NAMES[r] + suffix, v / np.linalg.norm(v)))
+
+            def _classify(t0, t1):
+                """Bester Akkord im Zeitfenster -> (Grundton, Terz, Name, Güte) oder None bei Stille."""
+                idx = np.where((fr_t >= t0) & (fr_t < t1))[0]
+                if len(idx) == 0 or loud <= 0 or float(rms[idx].mean()) < 0.05 * loud:
+                    return None
+                c = chroma[:, idx].mean(axis=1); c = c / max(1e-9, np.linalg.norm(c))
+                b = bass_c[:, idx].mean(axis=1); b = b / max(1e-9, float(b.max()))
+                # Übereinstimmung mit dem Muster + Bonus, wenn der Bass den Grundton spielt
+                # (trennt z.B. C-Dur von A-Moll, die zwei Töne gemeinsam haben)
+                scored = [(float(c @ v) + 0.25 * float(b[r]), float(c @ v), r, third, name) for r, third, name, v in templates]
+                score, fit, r, third, name = max(scored)
+                # Gleichmäßiges Rauschen passt zu jedem Dreiklang mit genau 0,5. Die Schwelle liegt
+                # knapp darüber; höher wäre strenger, kostet im vollen Mix aber echte Akkorde.
+                if fit < 0.53:
+                    return None
+                return (r, third, name, score)
+
+            def _segments(offset):
+                """Fenster von je 2 Beats; offset=1 -> ein einzelner Auftakt-Beat vorweg."""
+                bounds, t = [], phase
+                if offset:
+                    bounds.append((t, t + beat)); t += beat
+                total = len(y) / sr
+                while t + beat <= total + 1e-6:
+                    bounds.append((t, min(t + 2 * beat, total))); t += 2 * beat
+                return [(a, b2, _classify(a, b2)) for a, b2 in bounds]
+
+            # Welche Zählung passt besser (Wechsel auf Beat 1/3 oder 2/4)? Die mit den klareren Akkorden.
+            options = [_segments(0), _segments(1)]
+            def _quality(segs):
+                sc = [c[3] for _, _, c in segs if c]
+                return float(np.mean(sc)) if sc else -1.0
+            segs = max(options, key=_quality)
+
+            # Gleiche Nachbarn zu einem gehaltenen Akkord verbinden
+            merged = []
+            for t0, t1, c in segs:
+                if c is None:
+                    continue
+                if merged and merged[-1][2][2] == c[2] and abs(merged[-1][1] - t0) < 1e-6:
+                    merged[-1][1] = t1
+                else:
+                    merged.append([t0, t1, c])
+            if not merged:
+                _tls.error = "No chords detected."
+                print(f"❌ {_tls.error}")
+                return False
+
+            for t0, t1, (r, third, name, _) in merged:
+                st_s, en_s = t0 - phase, t1 - phase - 0.02 * beat   # Clip beginnt auf dem ersten Beat
+                events.append((st_s, en_s, 36 + r, 90))                               # Bass: Grundton
+                for semis in (0, third, 7):
+                    events.append((st_s, en_s, 48 + r + semis, 80))                   # Dreiklang ab C3
+                chord_markers.append((st_s, name))
+            _tls.chords = [m[2][2] for m in merged]
+
+            # Tonart schätzen: aus den erkannten Akkorden (welche Tonart enthält sie, und welcher
+            # Akkord ist das Zentrum?) plus der mittleren Tonverteilung (Krumhansl-Profile).
+            prof_maj = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+            prof_min = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+            mean_c = chroma.mean(axis=1)
+            total_len = sum(t1 - t0 for t0, t1, _ in merged)
+            share = {}  # Akkordname -> Zeitanteil
+            for t0, t1, c in merged:
+                share[c[2]] = share.get(c[2], 0.0) + (t1 - t0) / total_len
+            # Stufen-Dreiklänge (Halbtonabstand zum Grundton, Suffix) in Dur bzw. natürlichem Moll
+            diatonic = {False: [(0, ""), (2, "m"), (4, "m"), (5, ""), (7, ""), (9, "m")],
+                        True:  [(0, "m"), (3, ""), (5, "m"), (7, "m"), (8, ""), (10, "")]}
+            first_name, last_name = merged[0][2][2], merged[-1][2][2]
+            cands = []
+            for r in range(12):
+                for is_min, prof in ((False, prof_maj), (True, prof_min)):
+                    tonic = NOTE_NAMES[r] + ("m" if is_min else "")
+                    cover = sum(share.get(NOTE_NAMES[(r + semis) % 12] + suf, 0.0) for semis, suf in diatonic[is_min])
+                    profile = float(np.corrcoef(mean_c, np.roll(prof, r))[0, 1])
+                    score = (cover + 0.6 * share.get(tonic, 0.0) + 0.15 * (first_name == tonic)
+                             + 0.1 * (last_name == tonic) + 0.3 * profile)
+                    cands.append((score, r, is_min))
+            key_score, key_r, key_minor = max(cands)
+            # Dur und parallele Moll-Tonart haben dieselben Töne und lassen sich an einer
+            # Akkordschleife oft nicht unterscheiden -> beide nennen, die wahrscheinlichere zuerst.
+            if key_minor:
+                relative = f"{NOTE_NAMES[(key_r + 3) % 12]} major"
+            else:
+                relative = f"{NOTE_NAMES[(key_r + 9) % 12]} minor"
+            _tls.key = f"{NOTE_NAMES[key_r]} {'minor' if key_minor else 'major'} / {relative}"
+            try:
+                track.append(MetaMessage('key_signature', key=NOTE_NAMES[key_r] + ('m' if key_minor else '')))
+            except Exception:
+                pass  # nicht jede Kreuz-Schreibweise ist als MIDI-Tonart gültig
+            print(f"Key: {_tls.key} | Chords: {' | '.join(_tls.chords)}")
+
         # --- RASTER: Noten auf 16tel ziehen, Clip-Anfang auf einen Beat legen ---
-        if quantize:
+        # (Chords liegen bereits exakt auf dem Beat-Raster)
+        if quantize and not is_chord_mode:
             # Unter 100 BPM auf 32tel rastern: ist das Tempo nur halb so schnell erkannt
             # (87 statt 174), bleiben die echten 16tel so trotzdem erhalten.
             per_beat = 8 if bpm < 100 else 4
@@ -1924,18 +2069,20 @@ def audio_to_midi(audio_path, output_midi_path, mode, duration, sensitivity, smo
         # (Vorher wurde ein Schlag nach hinten geschoben, wenn der vorige noch "klang" –
         # bei dichten Hats oder gleichzeitigen Schlägen stimmte das Timing nicht.)
         channel = 9 if is_drum_mode else 0  # Kanal 10 = Drums (General MIDI)
-        raw_msgs = []
+        raw_msgs = []  # (Ticks, Rang, Nachricht) – bei gleicher Zeit: erst Off, dann Marker, dann On
         for start, end, note, vel in events:
             start_ticks = int(round(start * ticks_per_sec))
             end_ticks = max(start_ticks + 20, int(round(end * ticks_per_sec)))
-            raw_msgs.append((start_ticks, 1, note, vel))
-            raw_msgs.append((end_ticks, 0, note, 0))
-        raw_msgs.sort(key=lambda m: (m[0], m[1]))  # bei gleicher Zeit erst Off, dann On
+            raw_msgs.append((start_ticks, 2, Message('note_on', note=note, velocity=vel, channel=channel)))
+            raw_msgs.append((end_ticks, 0, Message('note_off', note=note, velocity=0, channel=channel)))
+        for start, text in chord_markers:
+            raw_msgs.append((int(round(start * ticks_per_sec)), 1, MetaMessage('marker', text=text)))
+        raw_msgs.sort(key=lambda m: (m[0], m[1]))
 
         last_ticks = 0
-        for ticks, is_on, note, vel in raw_msgs:
-            track.append(Message('note_on' if is_on else 'note_off', note=note, velocity=vel,
-                                 time=ticks - last_ticks, channel=channel))
+        for ticks, _, msg in raw_msgs:
+            msg.time = ticks - last_ticks
+            track.append(msg)
             last_ticks = ticks
 
         mid.save(output_midi_path)

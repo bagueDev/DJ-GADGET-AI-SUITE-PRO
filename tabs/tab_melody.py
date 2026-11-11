@@ -395,7 +395,7 @@ class MelodyTab(ctk.CTkFrame):
         # Parameter für Converter
         conv_opts = ctk.CTkFrame(self, fg_color="transparent")
         conv_opts.pack(pady=5)
-        self.midi_conv_mode = ctk.CTkOptionMenu(conv_opts, values=["🎶 Melody", "🥁 Drums"], width=100)
+        self.midi_conv_mode = ctk.CTkOptionMenu(conv_opts, values=["🎶 Melody", "🥁 Drums", "🎹 Chords"], width=100)
         self.midi_conv_mode.pack(side="left", padx=5)
         # Threshold (Sensitivity) MIT WERT-ANZEIGE
         ctk.CTkLabel(conv_opts, text="🪶 Sens:").pack(side="left", padx=(15, 2))
@@ -938,24 +938,35 @@ class MelodyTab(ctk.CTkFrame):
     def _run_conv(self, f, o, m, d, t, s, bpm=None, bpm_source="detected", full_mix=False, grid=False):
         err = None
         used_bpm = None
+        extra = None  # Chords-Modus: Tonart + Akkordfolge
         try:
             melody_generator.clear_last_error()
             ok = melody_generator.audio_to_midi(f, o, m, d, t, s, bpm, separate=full_mix, quantize=grid)
             used_bpm = melody_generator.get_last_bpm()
+            chords = melody_generator.get_last_chords()
+            if ok and chords:
+                extra = (melody_generator.get_last_key(), chords)
             if not ok: err = melody_generator.get_last_error()
         except Exception as e:
             err = f"Converter crashed: {e}"
             ok = False
-        self.after(0, lambda: self.conv_done(ok, o, err, used_bpm, bpm_source))
+        self.after(0, lambda: self.conv_done(ok, o, err, used_bpm, bpm_source, extra))
 
-    def conv_done(self, success, path, err=None, bpm=None, bpm_source="detected"):
+    def conv_done(self, success, path, err=None, bpm=None, bpm_source="detected", extra=None):
         if not success:
             self.add_log(f"❌ Audio to MIDI failed: {err or 'unknown error'}")
         if success:
             bpm_txt = f"{bpm:g} BPM ({bpm_source})" if bpm else "? BPM"
             self.midi_conv_status.configure(text=f"✅ Saved: {os.path.basename(path)} @ {bpm_txt}", text_color="green")
             self.add_log(f"✅ Audio to MIDI: {os.path.basename(path)} @ {bpm_txt}")
-            messagebox.showinfo("Success", f"MIDI file created:\n{path}\n\nTempo: {bpm_txt}")
+            info = f"MIDI file created:\n{path}\n\nTempo: {bpm_txt}"
+            if extra:
+                key, chords = extra
+                shown = " | ".join(chords[:16]) + (" | ..." if len(chords) > 16 else "")
+                self.add_log(f"🎹 Key (approx.): {key}")
+                self.add_log(f"🎹 Chords: {' | '.join(chords)}")
+                info += f"\n\nKey (approx.): {key}\nChords: {shown}"
+            messagebox.showinfo("Success", info)
         else:
             self.midi_conv_status.configure(text="❌ Failure", text_color="red")
 

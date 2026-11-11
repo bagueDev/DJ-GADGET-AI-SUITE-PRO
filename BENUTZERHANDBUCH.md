@@ -124,7 +124,13 @@ Der Converter arbeitet mit festen Regeln, nicht mit einem trainierten KI-Modell.
 
 - **Sample laden** (MP3/WAV/FLAC/AIFF), **Länge** 10/20/40 s oder Full.
 - **Modus 🥁 Drums:** sucht getrennt in Tiefen (Kick → C1), Mitten (Snare/Clap → D1) und Höhen (Hi-Hat → F#1). MIDI-Kanal 10, Velocity nach Schlagstärke.
-- **Modus 🎶 Melody:** erkennt eine einstimmige Tonhöhe. Akkorde und mehrere Stimmen gleichzeitig gehen nicht.
+- **Modus 🎶 Melody:** erkennt eine einstimmige Tonhöhe. Mehrere Stimmen gleichzeitig gehen hier nicht; für Akkorde gibt es den Chords-Modus.
+- **Modus 🎹 Chords:** erkennt die Akkordfolge, einen Akkord pro halbem Takt.
+  - **Ergebnis:** Dreiklang (ab C3) plus Grundton im Bass, exakt auf dem Beat-Raster, mit den Akkordnamen als Marker in der MIDI-Datei. Gleiche Akkorde hintereinander werden zu einem gehaltenen verbunden.
+  - **Tonart:** wird geschätzt und als Paar angezeigt, z. B. „A minor / C major". Dur und die parallele Moll-Tonart haben dieselben Töne und lassen sich an einer Akkordschleife oft nicht unterscheiden; die wahrscheinlichere steht vorn.
+  - **Was es kann und nicht kann:** Es liefert die Akkordfolge in Dur und Moll, nicht das Originalspiel. Lage, Umkehrungen, Septakkorde und Jazz-Harmonik werden auf den passenden Dreiklang vereinfacht. Schreibweise immer mit Kreuz (A# statt Bb).
+  - **Einstellungen:** Länge am besten auf **Full**. BPM wie gewohnt (Analyzer, eigener Wert oder Schätzung); bei 4/4 gedacht. Sens, Smooth, Grid und Full mix haben in diesem Modus keine Wirkung.
+  - Funktioniert auch mit einem ganzen Lied; am saubersten mit dem Piano-, Gitarren- oder „Other"-Stem aus Stems AI.
 - **Sens:** höher = mehr Noten, aber auch mehr Fehltreffer.
 - **🧽 Smooth:** für Gesang und Vibrato. Glättet die Tonhöhe, verbindet zerhackte gehaltene Töne, verwirft Störnoten. Ohne Smooth werden wiederholte gleiche Töne an jedem neuen Anschlag getrennt (gut für Synths, Klavier, Bass).
 - **🥁 BPM:** Tempo des Quell-Audios.
@@ -133,6 +139,8 @@ Der Converter arbeitet mit festen Regeln, nicht mit einem trainierten KI-Modell.
   - Eigener Wert (20–300) hat immer Vorrang. Das verwendete Tempo steht danach in Status, Log und Dialog.
 - **🧲 Snap to 1/16 grid:** zieht alle Noten aufs 16tel-Raster und legt den Clip-Anfang auf einen Beat. Braucht ein stimmiges BPM; am besten das aus dem Analyzer. Für freies Timing (Gesang, Rubato) aus lassen.
 - **🎚 Full mix (whole song):** für komplette Lieder. Trennt vor der Erkennung Schlagzeug und Töne. **Bei trockenen Loops und Stems aus lassen**, dort erzeugt es zusätzliche Fehltreffer. Rechnet bei langen Dateien einige Sekunden länger.
+
+**Was du erwarten kannst (Chords):** Im Test mit Akkordfolgen aus dem eigenen Generator stimmten 86 % der Halbtakte bei Akkorden allein und 79 % im vollen Mix. Typische Fehler: ein Akkord wird mit einem verwandten verwechselt (C-Dur statt A-Moll) oder der Wechsel sitzt einen halben Takt daneben.
 
 **Was du erwarten kannst (Drums):** Kicks werden bei trockenen Loops meist vollständig gefunden. Ein Clap oder eine Snare genau auf einer Kick wird oft nur als Kick erkannt, leise Zwischen-Hats fehlen meist. In einem ganzen Lied können Bass-Einsätze als Kick und Gesang als Snare auftauchen.
 
