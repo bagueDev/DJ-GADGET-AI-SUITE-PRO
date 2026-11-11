@@ -192,6 +192,20 @@ PROGRESSIONS = {
     
 }
 
+def harmony_intervals(scale):
+    """Tonleiter, aus der Akkorde, Bass, Pads und Strings gebaut werden.
+
+    Die Progression-Presets zählen Stufen einer Sieben-Ton-Leiter (1-5-6-4 ...) und stapeln
+    Terzen. Bei Skalen mit 5, 6 oder 12 Tönen zeigen diese Stufen auf falsche Töne und es
+    entstehen keine Dreiklänge. Dort wird deshalb die passende Dur- oder Moll-Leiter genommen
+    (kleine Terz ohne große -> Moll, sonst Dur). Die MELODIE bleibt in der gewählten Skala –
+    Pentatonik oder Blues über normalen Akkorden ist der übliche Fall.
+    """
+    intervals = SCALES.get(scale, SCALES["Minor"])
+    if len(intervals) == 7:
+        return intervals
+    return SCALES["Minor"] if (3 in intervals and 4 not in intervals) else SCALES["Major"]
+
 def _prog_key(name):
     """Vergleichsschlüssel ohne Emojis/Leerzeichen, damit GUI-Name und Rezept
     nicht an einem fehlenden Leerzeichen scheitern."""
@@ -433,7 +447,7 @@ def create_chord_files(root, scale, bpm, bars, progression_name, mode, output_di
 
         # 1. Zeit-Raster & Skala
         steps_per_bar = 12 if ("3/4" in time_sig or "6/8" in time_sig) else 16
-        intervals = SCALES.get(scale, SCALES["Minor"])
+        intervals = harmony_intervals(scale)
         base_note_ref = NOTES.get(root, 0) + 48 
         scale_notes = [base_note_ref + i for i in intervals]
         for oct_off in [12, 24]: scale_notes += [base_note_ref + oct_off + i for i in intervals]
@@ -683,10 +697,12 @@ def create_melody_files(root, scale, bpm, bars, time_sig, octave, mode, density,
         
         # --- NEU: Basis-Skala für den Harmony-Link definieren ---
         base_note_ref = NOTES.get(root, 0) + 48 # Referenz auf mittlerer Tonhöhe
-        scale_notes = [base_note_ref + i for i in intervals]
+        # (Akkord-Stufen aus der Sieben-Ton-Leiter; die Melodietöne unten bleiben in der gewählten Skala)
+        harm = harmony_intervals(scale)
+        scale_notes = [base_note_ref + i for i in harm]
         # Wir erweitern scale_notes um 2 Oktaven, damit der Harmony-Link genug Futter hat
         for oct_off in [12, 24]:
-            scale_notes += [base_note_ref + oct_off + i for i in intervals]
+            scale_notes += [base_note_ref + oct_off + i for i in harm]
         # --------------------------------------------------------
         
         # Pool über 3 Oktaven
@@ -826,10 +842,15 @@ def create_melody_files(root, scale, bpm, bars, time_sig, octave, mode, density,
                     pc = allowed_notes[idx] % 12
                     if ((dur >= 4 or pos % 8 == 0) and pc not in chord_pcs
                             and any((pc - c) % 12 in (1, 11) for c in chord_pcs)):
-                        nb = [i for i in (idx - 1, idx + 1) if 0 <= i < n_pool and allowed_notes[i] % 12 in chord_pcs]
-                        fresh = [i for i in nb if i != last_idx]   # möglichst keine Tonwiederholung erzeugen
-                        if fresh or nb:
-                            idx = random.choice(fresh or nb)
+                        # Erst die direkten Nachbarn; bei Skalen mit großen Tonabständen (Pentatonik)
+                        # liegt der nächste Akkordton manchmal zwei Schritte entfernt.
+                        for reach in (1, 2):
+                            nb = [i for i in (idx - reach, idx + reach)
+                                  if 0 <= i < n_pool and allowed_notes[i] % 12 in chord_pcs]
+                            if nb:
+                                fresh = [i for i in nb if i != last_idx]   # möglichst keine Tonwiederholung erzeugen
+                                idx = random.choice(fresh or nb)
+                                break
                     last_idx = idx
                     notes_to_play = [allowed_notes[idx]]
                     if "Triads" in mode and energy > 0.9:
@@ -2149,7 +2170,7 @@ def create_bass_files(root, scale, bpm, bars, genre, prog, output_dir, bass_styl
         prob = density / 100.0
 
         # 2. Skala & Harmonien
-        intervals = SCALES.get(scale, SCALES["Minor"])
+        intervals = harmony_intervals(scale)
         base_note_ref = NOTES.get(root, 0) + 36 
         scale_notes = []
         for oct_off in [0, 12, 24]:
@@ -2435,7 +2456,7 @@ def generate_pad_midi(root, scale, bars, prog, output_dir):
     mid = MidiFile(); track = MidiTrack(); mid.tracks.append(track)
     track.append(MetaMessage('track_name', name='Ambient Pads'))
     
-    intervals = SCALES.get(scale, SCALES["Minor"])
+    intervals = harmony_intervals(scale)
     base_note = NOTES.get(root, 0) + 48 
     scale_notes = []
     for oct_off in [0, 12, 24]:
@@ -2480,7 +2501,7 @@ def generate_strings_midi(root, scale, bars, prog, genre, output_dir):
     mid = MidiFile(); track = MidiTrack(); mid.tracks.append(track)
     track.append(MetaMessage('track_name', name='Orchestral Strings'))
     
-    intervals = SCALES.get(scale, SCALES["Minor"])
+    intervals = harmony_intervals(scale)
     base_note_ref = NOTES.get(root, 0) + 60 
     scale_notes = []
     for oct_off in [0, 12, 24]:

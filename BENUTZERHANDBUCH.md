@@ -89,6 +89,11 @@ Die App ist portabel — lege sie mit diesen Ordnern zusammen ab (fehlende Ordne
 - Dropdown-Wechsel (Genre, Waveform, Progression, Voicing) spielen automatisch eine 2-Bar-Vorschau ab. Dein generiertes Ergebnis bleibt dabei erhalten: ▶ Play und 💾 MIDI beziehen sich weiter auf die volle Sequenz. Während einer laufenden Generierung gibt es keine Vorschau.
 - **Progression „Random":** Im Full Loop wird einmal ein Preset gewürfelt, das alle Spuren gemeinsam spielen; welches es war, steht im Log. Im einzelnen Chords-Modus bleibt „Random" eine zufällige Stufe pro Takt.
 
+### Skalen und Akkorde 🎼
+- Bei **Skalen mit sieben Tönen** (Dur, Moll, Dorisch, Harmonisch Moll …) kommen Akkorde und Melodie aus derselben Skala.
+- Bei **Pentatonik, Blues, Hirajoshi, Ganzton und Chromatik** spielt nur die Melodie in der gewählten Skala. Akkorde, Bass, Pads und Strings nutzen die passende Dur- oder Moll-Tonleiter, damit die Presets (1-5-6-4 …) echte Dreiklänge ergeben. Eine pentatonische oder Blues-Melodie über normalen Akkorden ist auch in der Praxis der übliche Fall.
+- **Ganzton** und einige exotische Sieben-Ton-Skalen (Byzantinisch, Alteriert) bleiben bewusst spannungsreich: dort entstehen auch übermäßige und verminderte Akkorde bzw. mehr Reibung zwischen Melodie und Akkord.
+
 ### Mode: Melodie und Akkorde 🎼
 - **Im Full Loop** bestimmt „Mode" den Akkord-Typ (Power, Triads, 7ths, 9ths, Sus2, Sus4, Add9, 6/9). Die Melodie ist dort immer einstimmig. Mit „Melody (Mono)" spielt die Akkordspur Dreiklänge.
 - **Im einzelnen 🎶 Melody-Modus** macht „Triads" aus der Melodie dreistimmige Blöcke; alle anderen Einstellungen ergeben eine einstimmige Linie.
