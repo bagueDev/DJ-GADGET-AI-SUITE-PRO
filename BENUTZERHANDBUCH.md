@@ -177,7 +177,8 @@ Der Converter arbeitet mit festen Regeln, nicht mit einem trainierten KI-Modell.
 - **📜 History:** Ein geladener Chat wird auch dem Modell übergeben, du kannst also dort weitermachen, wo du aufgehört hast. 💾 Save speichert das aktuelle Gespräch als JSON.
 - **Langes Gespräch:** Passt der Verlauf nicht mehr ins Kontextfenster, lässt die App die ältesten Nachrichten weg und meldet das im Chat („✂️ Context full …"). Mehr Ctx oder 🗑️ Clear Context schaffen Platz.
 - **Fehler** des Modells oder beim Start stehen direkt im Chatfenster, mit Grund.
-- **⚙️ Extra server flags (optional, für Fortgeschrittene):** zusätzliche llama-server-Optionen, die beim 🚀 Start angehängt werden, z. B. `--cache-type-k q8_0 --cache-type-v q8_0` für einen weniger stark komprimierten Zwischenspeicher (mehr RAM, bei langen Gesprächen oft bessere Antworten). Ein falsches Flag verhindert den Start; die Meldung nennt es.
+- **Zwischenspeicher (Cache):** Die App komprimiert ihn passend zum Ctx: bis 16.384 Tokens K q8 / V q8, bis 65.536 K q8 / V q4, darüber K q4 / V q4. Kleinere Kontexte bekommen so die genauere Stufe, große passen weiter in den Speicher. Die gewählte Stufe steht beim Laden im Chat („Cache: K … / V …").
+- **⚙️ Extra server flags (optional, für Fortgeschrittene):** zusätzliche llama-server-Optionen, die beim 🚀 Start angehängt werden, z. B. `--cache-type-k q8_0 --cache-type-v q8_0`, um die Cache-Stufe selbst festzulegen, oder `--reasoning on` für Modelle mit Denkmodus. Bei doppelten Optionen gilt deine. Ein falsches Flag verhindert den Start; die Meldung nennt es.
 - **Optionaler Webzugriff per MCP:** MCP-Proxy aktiv. Trage die URL deines eigenen MCP-Servers ein oder nutze V.I.N.C.E.N.T. (Open-Source-MCP-Server). Verbinde nur Server, denen du vertraust.
 
 ## 10. Log 📝

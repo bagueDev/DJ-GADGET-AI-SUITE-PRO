@@ -133,9 +133,28 @@ def _log_tail(path, lines=6):
         return ""
 
 
+def kv_cache_types(n_ctx):
+    """Kompression des Zwischenspeichers (KV-Cache) passend zur Kontextgröße -> (K, V).
+
+    Die K-Werte entscheiden, worauf das Modell achtet, und vertragen Kompression schlechter
+    als die V-Werte (der Inhalt, der dort abgeholt wird). Deshalb wird zuerst bei V gespart:
+      bis 16k   q8 / q8   der Unterschied sind nur ein paar hundert MB
+      bis 64k   q8 / q4   empfindlichen Teil genau halten, beim Inhalt sparen
+      darüber   q4 / q4   sonst passt der Kontext oft nicht mehr in den Speicher
+    Gemessen (3B-Modell, 32k): q4/q4 936 MB, q8/q4 1352 MB, q8/q8 1768 MB, f16 3328 MB.
+    """
+    n_ctx = int(n_ctx)
+    if n_ctx <= 16384:
+        return "q8_0", "q8_0"
+    if n_ctx <= 65536:
+        return "q8_0", "q4_0"
+    return "q4_0", "q4_0"
+
+
 def start_server(model_path, n_ctx, threads, extra_flags=""):
     server_bin = find_llama_server()
     port = port_for_server()
+    cache_k, cache_v = kv_cache_types(n_ctx)
     cmd = [
         server_bin,
         "-m", model_path,
@@ -145,8 +164,8 @@ def start_server(model_path, n_ctx, threads, extra_flags=""):
         "--port", str(port),
         "--host", "127.0.0.1",
         "--cors-origins", f"http://127.0.0.1:{port},http://localhost:{port}",
-        "--cache-type-k", "q4_0",
-        "--cache-type-v", "q4_0",
+        "--cache-type-k", cache_k,
+        "--cache-type-v", cache_v,
         "--batch-size", "512",
         "--ubatch-size", "64",
         "--flash-attn", "1",
@@ -377,7 +396,10 @@ def run_chat_session(model_path, sys_prompt_text, temperature, max_tokens, repea
         sys.stdout.flush()
 
     try:
-        say({"sys": f"🧠 Load Model... (GPU: Metal, Threads: {optimal_threads}, Ctx: {n_ctx})"})
+        cache_k, cache_v = kv_cache_types(n_ctx)
+        # Stehen Cache-Optionen in den Extra-Flags, gelten die (spätere Angabe gewinnt)
+        cache_txt = "set by extra flags" if "--cache-type" in (extra_flags or "") else f"K {cache_k} / V {cache_v}"
+        say({"sys": f"🧠 Load Model... (GPU: Metal, Threads: {optimal_threads}, Ctx: {n_ctx}, Cache: {cache_txt})"})
         proc, port = start_server(model_path, n_ctx, optimal_threads, extra_flags)
         if proc is None:
             return
