@@ -49,3 +49,6 @@ finalBuildpatch.sh
 # Duplicate assets
 Unknown-2.icns
 temp_melody/
+
+# Local test suite (kept out of the repository)
+tests/

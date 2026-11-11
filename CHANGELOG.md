@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DnB: Hats als Muster** – drei Varianten (Rolling 16ths, Shuffle, Straight 8ths) plus feste Open-Hat-Positionen pro Sektion; Density dünnt das Muster aus, statt in jedem Takt andere Löcher zu würfeln.
 - **DnB/Rolling: Ghost-Snares** um die Hauptschläge (ab Density 40) und **Snare-Wirbel statt Tom-Fill** für beide DnB-Varianten.
 - **Bass rastet auf die Kick ein (Full Loop)** – bei DnB, Trap und HipHop spielt der Bass mit den Stilen „Steady" und „Busy" genau auf den Kick-Positionen der Drums (eine Note pro Kick, gehalten bis zur nächsten; Trap als lange 808, DnB als kurze Sub-Stöße). Vorher lagen nur 50–86 % der Bass-Einsätze auf einer Kick und 28–50 % der Kicks hatten eine Bassnote, jetzt jeweils 100 %. Feste Bass-Patterns (Neuro Roller, Dembow …) und House/Techno/Reggae/Jazz bleiben unverändert.
+- **Keine Doppeltreffer mehr** – House spielte gelegentlich zwei offene Hats bzw. zwei Claps auf demselben Schritt, DnB/Breakbeat zwei Ghost-Snares.
 - Jazz-Comping wird pro Takt statt pro Schritt gewürfelt; Humanize-Jitter gilt pro Schlag und summiert sich nicht mehr auf.
 
 ### 🎼 Melody Lab – Generator-Fixes (🎹)

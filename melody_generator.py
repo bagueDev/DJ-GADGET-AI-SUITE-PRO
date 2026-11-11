@@ -1398,11 +1398,11 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                         events.append((step, 39, 120 if step_in_bar in [4, 12] else 75))
                     if step_in_bar in current_hp["s"] and energy >= 0.6 and random.random() < prob:
                         events.append((step, 37, random.randint(75, 95)))
-                    # Ghost-Clap + offene Hat als Variation
-                    if step_in_bar == 15 and energy >= 0.6 and random.random() < prob * 0.4:
+                    # Ghost-Clap als Variation (nicht, wenn das Muster dort schon einen Clap hat).
+                    # Die offene Hat kommt aus dem festen Hat-Muster weiter unten.
+                    if (step_in_bar == 15 and 15 not in current_hp["c"] and energy >= 0.6
+                            and random.random() < prob * 0.4):
                         events.append((step, 39, random.randint(50, 65)))
-                    if step_in_bar == 14 and energy >= 0.7 and random.random() < prob * 0.35:
-                        events.append((step, 46, 85))
 
                 # 3. SYNTHPOP
                 elif "Synthpop" in genre:
@@ -1435,7 +1435,8 @@ def create_drum_files(genre, bpm, bars, density, swing, human, output_dir,time_s
                     if step_in_bar in current_amen["ghost"] and energy >= 0.6 and random.random() < prob:
                         events.append((step, 40, random.randint(35, 55)))
                     # Flam/Ghost direkt vor der 4 (Schritt 11)
-                    if step_in_bar == 11 and energy >= 0.6 and random.random() < 0.6:
+                    if (step_in_bar == 11 and 11 not in current_amen["ghost"] and energy >= 0.6
+                            and random.random() < 0.6):
                         events.append((step, 40, 45))
                     # Hats als Muster mit Akzenten + Open Hats auf Offbeats
                     if dnb_hat["w"][step_in_bar % 4] > 1.0 - (prob * energy):
