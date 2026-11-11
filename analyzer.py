@@ -55,6 +55,11 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
         if not os.path.isfile(file_path):
             print(f"Tag error: file not found: {file_path}", file=sys.stderr)
             return False
+        # Tracknummer: leer, "NONE" oder "0" heißt "nicht anfassen". Der Standardwert "0" wurde
+        # früher wirklich geschrieben – Auto-Tag setzte so bei jedem Scan die Tracknummer auf 0.
+        track_val = clean(track).strip()
+        if track_val == "0":
+            track_val = ""
         img_data = None
         mime_type = "image/jpeg"
         if cover_path and cover_path != "NONE" and os.path.exists(cover_path):
@@ -69,7 +74,7 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
             if clean(album): tags.add(TALB(encoding=3, text=clean(album)))
             if clean(bpm): tags.add(TBPM(encoding=3, text=clean(bpm)))
             if clean(camelot): tags.add(TKEY(encoding=3, text=clean(camelot)))
-            if clean(track): tags.add(TRCK(encoding=3, text=clean(track)))
+            if track_val: tags.add(TRCK(encoding=3, text=track_val))
             if img_data: tags.add(APIC(encoding=3, mime=mime_type, type=3, desc=u'Cover', data=img_data))
             tags.save(file_path, v2_version=3)
         elif ext == '.flac':
@@ -86,7 +91,7 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
                 audio.add_picture(pic)
             if clean(bpm): audio['bpm'] = clean(bpm)
             if clean(camelot): audio['initialkey'] = clean(camelot)
-            if clean(track): audio['tracknumber'] = clean(track)
+            if track_val: audio['tracknumber'] = track_val
             audio.save()
         elif ext == '.m4a':
             audio = MP4(file_path)
@@ -101,8 +106,11 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
                 try: audio['tmpo'] = [int(float(clean(bpm)))]
                 except Exception as e: print(f"Tag warning: BPM {bpm!r} not written to {file_path}: {e}", file=sys.stderr)
             if clean(camelot): audio['\xa9cmt'] = clean(camelot)
-            if clean(track):
-                try: audio['trkn'] = [(int(clean(track)), 0)]
+            if track_val:
+                # "3" oder "3/12" (Nummer/Gesamtzahl)
+                try:
+                    num, _, total = track_val.partition("/")
+                    audio['trkn'] = [(int(num), int(total) if total.strip() else 0)]
                 except Exception as e: print(f"Tag warning: track number {track!r} not written to {file_path}: {e}", file=sys.stderr)
             audio.save()
         elif ext in ['.wav', '.aiff', '.aif']:
@@ -113,7 +121,7 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
             if clean(album):  audio.tags.add(TALB(encoding=3, text=clean(album)))
             if clean(bpm):    audio.tags.add(TBPM(encoding=3, text=clean(bpm)))
             if clean(camelot): audio.tags.add(TKEY(encoding=3, text=clean(camelot)))
-            if clean(track):  audio.tags.add(TRCK(encoding=3, text=clean(track)))
+            if track_val:  audio.tags.add(TRCK(encoding=3, text=track_val))
             if img_data:
                 # (APIC kommt aus dem Import am Dateianfang. Ein Import HIER machte APIC zur
                 # lokalen Variable der ganzen Funktion – der MP3-Zweig oben stürzte dadurch

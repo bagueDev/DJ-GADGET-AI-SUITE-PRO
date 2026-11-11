@@ -271,7 +271,9 @@ class EditorTab(ctk.CTkFrame):
             self.entry_bpm.get() or "NONE",     # NEU
             self.entry_key.get() or "NONE",     # NEU
             self.entry_camelot.get() or "NONE",  # NEU
-            self.entry_track.get() or "0"   # <--- NEU: Track Nummer
+            # Leeres Feld = Tracknummer nicht anfassen. (Früher wurde hier "0" geschickt und damit
+            # bei jedem Speichern eine vorhandene Nummer mit 0 überschrieben.)
+            self.entry_track.get().strip() or "NONE"
         ])
         
         saved_file = self.current_editor_file

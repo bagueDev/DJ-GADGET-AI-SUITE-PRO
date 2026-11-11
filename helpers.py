@@ -160,7 +160,7 @@ def read_tags_quick(path):
     # Standardwerte
     info = {
         "artist": "", "title": "", "album": "", 
-        "bpm": "", "key": "", "camelot": ""
+        "bpm": "", "key": "", "camelot": "", "tracknumber": ""
     }
     try:
         ext = os.path.splitext(path)[1].lower()
@@ -176,6 +176,7 @@ def read_tags_quick(path):
                 info['bpm'] = str(tags.get('TBPM', [''])[0]) if 'TBPM' in tags else ""
                 # TKEY wird oft für Key oder Camelot genutzt
                 info['camelot'] = str(tags.get('TKEY', [''])[0]) if 'TKEY' in tags else ""
+                info['tracknumber'] = str(tags.get('TRCK', [''])[0]) if 'TRCK' in tags else ""
             except: pass
 
         # 2. FLAC
@@ -188,6 +189,7 @@ def read_tags_quick(path):
                 info['album'] = f.get('album', [''])[0]
                 info['bpm'] = f.get('bpm', [''])[0]
                 info['camelot'] = f.get('initialkey', [''])[0]
+                info['tracknumber'] = f.get('tracknumber', [''])[0]
             except: pass
 
         # 3. M4A / MP4
@@ -202,6 +204,9 @@ def read_tags_quick(path):
                 tmpo = m.get('tmpo', [0])[0]
                 info['bpm'] = str(tmpo) if tmpo else ""
                 info['camelot'] = m.get('\xa9cmt', [''])[0] # Oft im Kommentar
+                # 'trkn' ist ein Paar (Nummer, Gesamtzahl)
+                trkn = m.get('trkn', [(0, 0)])[0]
+                info['tracknumber'] = str(trkn[0]) if trkn and trkn[0] else ""
             except: pass
 
         # 4. WAV / AIFF
@@ -216,6 +221,7 @@ def read_tags_quick(path):
                     info['album'] = str(t.tags.get('TALB', [''])[0]) if 'TALB' in t.tags else ""
                     info['bpm'] = str(t.tags.get('TBPM', [''])[0]) if 'TBPM' in t.tags else ""
                     info['camelot'] = str(t.tags.get('TKEY', [''])[0]) if 'TKEY' in t.tags else ""
+                    info['tracknumber'] = str(t.tags.get('TRCK', [''])[0]) if 'TRCK' in t.tags else ""
             except: pass
             
     except Exception as e:

@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✏️ Metadata Editor & Auto-Tag – ehrliche Rückmeldung, fehlende Felder (✏️)
 - **MP3 mit neuem Cover wurde nie gespeichert** – ein Import mitten in der Funktion ließ den MP3-Zweig abstürzen, sobald ein Cover dabei war; der Fehler wurde verschluckt und der Editor zeigte trotzdem „Saved". Es wurde dann gar nichts geschrieben, auch nicht Artist oder Titel. Behoben.
+- **Tracknummer (Trk) ging verloren** – sie wurde zwar geschrieben, aber nie wieder eingelesen: Das Feld im Editor blieb nach dem Neuladen leer, und das nächste Speichern überschrieb sie mit 0. Sie wird jetzt in allen Formaten gelesen; ein leeres Feld lässt die vorhandene Nummer stehen. M4A versteht auch „3/12".
+- **Auto-Tag setzte die Tracknummer auf 0** – beim Scan mit Auto-Tag wurde neben BPM und Key auch der Standardwert „0" als Tracknummer geschrieben und überschrieb vorhandene Nummern. Auto-Tag fasst jetzt wirklich nur noch BPM und Key an.
 - **FLAC:** Titel, Album und Cover werden jetzt geschrieben (bisher nur Artist, BPM, Key, Track).
 - **M4A:** Artist, Titel, Album und Cover werden jetzt geschrieben (bisher nur BPM, Key, Track). Leere Felder überschreiben bei diesen neu geschriebenen Feldern nichts.
 - **„❌ Save failed (see Log)" statt immer „✅ Saved!"** – der Editor wertet das Ergebnis des Tag-Prozesses aus; der Grund (schreibgeschützt, beschädigt, nicht unterstütztes Format, Datei fehlt) steht im Log-Tab.
