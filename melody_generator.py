@@ -795,6 +795,15 @@ def create_melody_files(root, scale, bpm, bars, time_sig, octave, mode, density,
                 else:
                     chord_root = NOTES.get(root, 0)
                 anchor = _anchor(chord_root)
+                # Töne des Akkords in diesem Takt: Grundton + Terz + Quinte, von der Stufe aus in
+                # Skalenschritten gestapelt – genau so baut auch die Akkordspur ihre Dreiklänge.
+                if prog_data:
+                    step_d = prog_data[bar % len(prog_data)]
+                    degree = int(step_d[1:]) if isinstance(step_d, str) else step_d
+                else:
+                    degree = 0
+                chord_pcs = {chord_root, scale_notes[degree + 2] % 12, scale_notes[degree + 4] % 12}
+                last_idx = None
 
                 onsets = {pos: (dur, off) for pos, dur, off in m}
                 pos = 0
@@ -810,6 +819,18 @@ def create_melody_files(root, scale, bpm, bars, time_sig, octave, mode, density,
                         nb = [i for i in (idx - 1, idx + 1) if 0 <= i < n_pool]
                         random.shuffle(nb)
                         idx = next((i for i in nb if (allowed_notes[i] - chord_root) % 12 in low_steps), idx)
+                    # Gewichtige Töne (Viertel oder länger, oder auf Schlag 1 und 3) dürfen sich nicht
+                    # mit dem Akkord reiben: Liegt der Ton einen Halbton neben einem Akkordton, rückt er
+                    # einen Skalenschritt auf einen Akkordton. Spannungstöne mit Ganzton-Abstand (None,
+                    # Sexte ...) und kurze Durchgangstöne bleiben, sonst wird die Linie zum Akkord-Arpeggio.
+                    pc = allowed_notes[idx] % 12
+                    if ((dur >= 4 or pos % 8 == 0) and pc not in chord_pcs
+                            and any((pc - c) % 12 in (1, 11) for c in chord_pcs)):
+                        nb = [i for i in (idx - 1, idx + 1) if 0 <= i < n_pool and allowed_notes[i] % 12 in chord_pcs]
+                        fresh = [i for i in nb if i != last_idx]   # möglichst keine Tonwiederholung erzeugen
+                        if fresh or nb:
+                            idx = random.choice(fresh or nb)
+                    last_idx = idx
                     notes_to_play = [allowed_notes[idx]]
                     if "Triads" in mode and energy > 0.9:
                         notes_to_play += [allowed_notes[i] for i in (idx + 2, idx + 4) if i < n_pool]

@@ -104,6 +104,7 @@ Melodien werden nicht mehr Note für Note gewürfelt, sondern aus einem **Motiv*
 
 - **Aufbau in 4-Takt-Phrasen:** Takt 1 Motiv A · Takt 2 Motiv A mit anderem Ende · Takt 3 Kontrast-Motiv B · Takt 4 Motiv A mit Schluss auf dem Akkord-Grundton.
 - **Mit Progression:** Das Motiv wandert mit den Akkorden mit, bleibt aber erkennbar. Mit „Random" im einzelnen Melody-Modus bleibt es auf dem Grundton.
+- **Gehaltene Töne passen zum Akkord:** Längere Töne und Töne auf Schlag 1 und 3 werden so gelegt, dass sie sich nicht mit dem Akkord des Takts reiben. Kurze Durchgangstöne dazwischen sind frei.
 - **Density** bestimmt, wie viele Töne das Motiv hat. Bei sehr niedriger Density besteht es nur aus ein, zwei Tönen.
 - **Arrangements** (Radio Edit, DnB Journey …) bekommen für ruhige und volle Abschnitte je ein eigenes Motiv.
 - Gefällt dir ein Motiv nicht: neu generieren. Gefällt es: 🔒 Lock setzen (siehe Seed).
