@@ -16,6 +16,7 @@ import logging
 # Warnungen landen über den Handler in main.py im Log-Tab
 log = logging.getLogger("djgadget")
 import mutagen
+import re
 import urllib.parse
 import tkinter as tk              # Das normale Tkinter (für Menüs)
 import customtkinter as ctk       # Das moderne CustomTkinter (für Fenster)
@@ -279,7 +280,14 @@ def read_tags_quick(path):
                 # BPM ist bei M4A oft ein Integer im Feld 'tmpo'
                 tmpo = m.get('tmpo', [0])[0]
                 info['bpm'] = str(tmpo) if tmpo else ""
-                info['camelot'] = m.get('\xa9cmt', [''])[0] # Oft im Kommentar
+                # Tonart: eigenes Feld; ältere Versionen schrieben den Camelot-Code in den Kommentar
+                key_raw = m.get("----:com.apple.iTunes:initialkey", [b""])[0]
+                key_txt = bytes(key_raw).decode("utf-8", "replace").strip() if key_raw else ""
+                if not key_txt:
+                    old = str(m.get('\xa9cmt', [''])[0]).strip()
+                    if re.fullmatch(r"(1[0-2]|[1-9])[ABab]", old):
+                        key_txt = old
+                info['camelot'] = key_txt
                 # 'trkn' ist ein Paar (Nummer, Gesamtzahl)
                 trkn = m.get('trkn', [(0, 0)])[0]
                 info['tracknumber'] = str(trkn[0]) if trkn and trkn[0] else ""
@@ -651,8 +659,15 @@ def get_open_key(camelot_code):
         return ""
     
     code = camelot_code.strip().upper()
-    # A wird zu m (moll), B wird zu d (dur)
-    return code.replace('A', 'm').replace('B', 'd')
+    # Open Key zählt anders als Camelot: C-Dur ist 8B bzw. 1d, G-Dur 9B bzw. 2d.
+    # A wird zu m (moll), B wird zu d (dur).
+    try:
+        number, letter = int(code[:-1]), code[-1]
+    except ValueError:
+        return ""
+    if not 1 <= number <= 12 or letter not in "AB":
+        return ""
+    return f"{(number - 8) % 12 + 1}{'m' if letter == 'A' else 'd'}"
 
 def reveal_in_finder(path):
     """Öffnet den Finder (Mac) oder Explorer (Win) und markiert die Datei."""

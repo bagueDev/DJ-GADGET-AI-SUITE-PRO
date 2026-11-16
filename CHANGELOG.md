@@ -65,11 +65,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Letzter Ton ging verloren**, wenn das Audio mitten im Ton endet – behoben.
 - „No notes detected" und andere Converter-Fehler erscheinen jetzt im Log-Tab.
 
+### 🔍 Playlist & BPM – genaueres Tempo (🔍)
+- **BPM rastete auf grobe Stufen ein** – die Erkennung lieferte nur Rasterwerte (117.45, 123.05, 129.20, 172.27 …): Tracks mit 122 bis 126 BPM zeigten alle 123.05, und Auto-Tag schrieb diesen Wert in die Datei. Das Tempo wird jetzt um den Rohwert herum fein nachgemessen (Klick-Tracks mit 120/124/125/126/128 BPM: exakt). Bei Material ohne klaren Puls bleibt der bisherige Wert. Halbes Tempo (z. B. 87 statt 174) kann weiterhin vorkommen – dafür Min-BPM oder „BPM (2x)".
+
 ### ✏️ Metadata Editor & Auto-Tag – ehrliche Rückmeldung, fehlende Felder (✏️)
+- **Open Key stimmte nicht** – die Statuszeile zeigte die Camelot-Zahl mit anderem Buchstaben (9B → „9d"). Open Key zählt ab C-Dur: 8B ist 1d, 9B ist 2d.
 - **MP3 mit neuem Cover wurde nie gespeichert** – ein Import mitten in der Funktion ließ den MP3-Zweig abstürzen, sobald ein Cover dabei war; der Fehler wurde verschluckt und der Editor zeigte trotzdem „Saved". Es wurde dann gar nichts geschrieben, auch nicht Artist oder Titel. Behoben.
 - **Tracknummer (Trk) ging verloren** – sie wurde zwar geschrieben, aber nie wieder eingelesen: Das Feld im Editor blieb nach dem Neuladen leer, und das nächste Speichern überschrieb sie mit 0. Sie wird jetzt in allen Formaten gelesen; ein leeres Feld lässt die vorhandene Nummer stehen. M4A versteht auch „3/12".
 - **Auto-Tag setzte die Tracknummer auf 0** – beim Scan mit Auto-Tag wurde neben BPM und Key auch der Standardwert „0" als Tracknummer geschrieben und überschrieb vorhandene Nummern. Auto-Tag fasst jetzt wirklich nur noch BPM und Key an.
 - **FLAC:** Titel, Album und Cover werden jetzt geschrieben (bisher nur Artist, BPM, Key, Track).
+- **M4A: Kommentar bleibt erhalten** – Auto-Tag und der Editor schrieben den Camelot-Code ins Kommentarfeld und überschrieben damit einen vorhandenen Kommentar. Der Code steht jetzt im üblichen Tonart-Feld (`initialkey`); ein bereits überschriebener Kommentar lässt sich nicht wiederherstellen. Dateien aus älteren Versionen werden weiter gelesen.
 - **M4A:** Artist, Titel, Album und Cover werden jetzt geschrieben (bisher nur BPM, Key, Track). Leere Felder überschreiben bei diesen neu geschriebenen Feldern nichts.
 - **„❌ Save failed (see Log)" statt immer „✅ Saved!"** – der Editor wertet das Ergebnis des Tag-Prozesses aus; der Grund (schreibgeschützt, beschädigt, nicht unterstütztes Format, Datei fehlt) steht im Log-Tab.
 - **Auto-Tag beim Scan** trägt „Failed" statt „Saved" ein, wenn BPM/Key nicht geschrieben werden konnten; die Meldungen des Analyzer-Prozesses erscheinen im Log-Tab. Dessen Fehlerausgabe wird jetzt mitgelesen (vorher konnte der Scan an einer vollen Pipe hängen bleiben).

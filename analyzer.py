@@ -13,7 +13,7 @@ import warnings
 import mutagen
 from mutagen.id3 import ID3, TKEY, TBPM, APIC, TIT2, TPE1, TALB, ID3NoHeaderError
 from mutagen.flac import FLAC, Picture
-from mutagen.mp4 import MP4, MP4Cover
+from mutagen.mp4 import MP4, MP4Cover, MP4FreeForm
 from mutagen.wave import WAVE
 from mutagen.aiff import AIFF 
 import multiprocessing
@@ -24,6 +24,9 @@ warnings.filterwarnings("ignore")
 # WICHTIG: Begrenzt Numba auf einen Thread, um Segfaults auf dem Mac zu vermeiden
 #os.environ["OMP_NUM_THREADS"] = "1"
 #os.environ["NUMBA_NUM_THREADS"] = "1"
+
+# M4A: übliches Feld für die Tonart (so lesen es auch rekordbox, Traktor und Serato)
+M4A_KEY_ATOM = "----:com.apple.iTunes:initialkey"
 
 AUDIO_EXTENSIONS = {'.mp3', '.wav', '.aiff', '.aif', '.flac', '.m4a'}
 
@@ -105,7 +108,10 @@ def write_metadata(file_path, artist, title, album, cover_path, bpm, key, camelo
             if clean(bpm): 
                 try: audio['tmpo'] = [int(float(clean(bpm)))]
                 except Exception as e: print(f"Tag warning: BPM {bpm!r} not written to {file_path}: {e}", file=sys.stderr)
-            if clean(camelot): audio['\xa9cmt'] = clean(camelot)
+            if clean(camelot):
+                # Früher landete der Camelot-Code im Kommentarfeld und überschrieb dort,
+                # was der Nutzer eingetragen hatte. Der Kommentar bleibt jetzt unberührt.
+                audio[M4A_KEY_ATOM] = [MP4FreeForm(clean(camelot).encode("utf-8"))]
             if track_val:
                 # "3" oder "3/12" (Nummer/Gesamtzahl)
                 try:
@@ -162,6 +168,70 @@ def detect_key_advanced(y, sr):
             best_key = (pitches[i], "minor")
     return best_key    
 
+def refine_bpm(y, sr, coarse_bpm, beat_times=None, hop_length=512):
+    """Verfeinert das Tempo aus librosa.beat.beat_track.
+
+    beat_track liefert nur Rasterwerte (bei 22050 Hz z. B. 117.45, 123.05, 129.20, 172.27):
+    Tracks mit 122 bis 126 BPM landen alle auf 123.05. Hier wird um diesen Rohwert herum (±6 %)
+    in 0.02-BPM-Schritten gesucht, bei welchem Tempo die Einsätze des Stücks am regelmäßigsten
+    wiederkehren. Ist das Ergebnis nicht eindeutig (Gesang, Flächen, wechselndes Tempo), gilt der
+    mittlere Abstand der gefundenen Beats, sonst der Rohwert.
+    """
+    coarse = float(coarse_bpm)
+    if not np.isfinite(coarse) or coarse <= 0:
+        return coarse
+
+    # mittlerer Beat-Abstand als zweite Meinung
+    regression = None
+    if beat_times is not None and len(beat_times) >= 8:
+        slope = np.polyfit(np.arange(len(beat_times)), np.asarray(beat_times, dtype=float), 1)[0]
+        if slope > 0:
+            regression = 60.0 / slope
+            if abs(regression - coarse) > coarse * 0.03:
+                regression = None   # Beats sind gesprungen, nicht verwenden
+
+    fine = quality = None
+    try:
+        env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length)
+        fps = sr / hop_length
+        max_frames = int(8 * 60 * fps)          # höchstens 8 Minuten aus der Mitte
+        if len(env) > max_frames:
+            start = (len(env) - max_frames) // 2
+            env = env[start:start + max_frames]
+        if len(env) >= int(20 * fps):           # unter 20 s zu wenig Material
+            env = env - env.mean()
+            t = np.arange(len(env)) / fps
+            cands = np.arange(coarse * 0.94, coarse * 1.06, 0.02)
+            score = np.zeros(len(cands))
+            for i in range(0, len(cands), 64):  # in Blöcken, damit der Speicher klein bleibt
+                block = cands[i:i + 64, None] / 60.0
+                for harmonic, weight in ((1, 1.0), (2, 0.7), (4, 0.5)):
+                    phase = -2j * np.pi * harmonic * block * t[None, :]
+                    score[i:i + 64] += weight * np.abs((env[None, :] * np.exp(phase)).sum(axis=1))
+            best = int(np.argmax(score))
+            at_edge = best < 3 or best > len(cands) - 4
+            far = np.abs(cands - cands[best]) > cands[best] * 0.005
+            if not at_edge and far.any():
+                # Scheitelpunkt zwischen den Rasterschritten (Parabel durch die drei höchsten Werte)
+                a, b, c = score[best - 1], score[best], score[best + 1]
+                shift = 0.5 * (a - c) / (a - 2 * b + c) if (a - 2 * b + c) != 0 else 0.0
+                fine = float(cands[best] + max(-0.5, min(0.5, shift)) * 0.02)
+                quality = float(score[best] / (np.median(score[far]) + 1e-9))
+    except Exception as e:
+        print(f"BPM refine skipped: {e}", file=sys.stderr)
+
+    if fine is not None and (quality >= 8.0 or (regression is not None and abs(fine - regression) <= fine * 0.003)):
+        bpm = fine
+    elif regression is not None:
+        bpm = regression
+    else:
+        return coarse
+    # Messgenauigkeit ist etwa ±0.02 BPM: knapp neben einer ganzen Zahl heißt ganze Zahl
+    if abs(bpm - round(bpm)) <= 0.03:
+        bpm = float(round(bpm))
+    return bpm
+
+
 def analyze_track(file_path, do_write_tags=False, min_bpm=0, max_bpm=999):
     try:
         # 1. Gesamtdauer ermitteln
@@ -190,6 +260,7 @@ def analyze_track(file_path, do_write_tags=False, min_bpm=0, max_bpm=999):
 
         # --- BPM LOGIK ---
         bpm_val = float(tempo[0]) if np.ndim(tempo) > 0 else float(tempo)
+        bpm_val = refine_bpm(y, sr, bpm_val, beat_times)
         if min_bpm > 0 and bpm_val < min_bpm: bpm_val *= 2
         elif max_bpm > 0 and max_bpm < 999 and bpm_val > max_bpm: bpm_val /= 2
         
