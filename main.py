@@ -714,7 +714,7 @@ class DJApp(ctk.CTk):
             license_path = os.path.join(base_dir, "LICENSE")
             if os.path.exists(license_path):
                 # -t: im Texteditor öffnen (die Datei hat keine Endung)
-                os.system(f'open -t "{license_path}"')
+                subprocess.run(["open", "-t", license_path])
             else:
                 messagebox.showinfo("License", "LICENSE file not found.\nSee https://www.gnu.org/licenses/gpl-3.0.html")
         

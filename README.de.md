@@ -89,7 +89,7 @@ Faster-Whisper, offline. Ausgabe als `.txt` und **`.lrc`** mit Zeitstempeln. Bat
 ### 🤖 AI Chat
 Beliebige GGUF-Modelle über llama.cpp (Metal-beschleunigt) mit einem Systemprompt für Musik, Verlauf, HTML-Export und der **nativen llama.cpp-Weboberfläche** im Browser.
 
-**Optionaler Webzugriff per MCP:** Der llama.cpp-MCP-Prozess ist aktiv. Trage die URL deines eigenen MCP-Servers ein oder nutze **V.I.N.C.E.N.T.** (unser Open-Source-MCP-Server, [github.com/bagueDev](https://github.com/bagueDev)). Verbinde nur Server, denen du vertraust, denn sie geben dem Modell Werkzeuge in die Hand.
+**Optionaler Webzugriff per MCP:** Setze im Chat-Tab den Haken bei **🔌 MCP proxy (Web UI)**, bevor du 🚀 Start drückst (standardmäßig aus). Trage dann die URL deines eigenen MCP-Servers ein oder nutze **V.I.N.C.E.N.T.** (unser Open-Source-MCP-Server, [github.com/bagueDev](https://github.com/bagueDev)). Verbinde nur Server, denen du vertraust, denn sie geben dem Modell Werkzeuge in die Hand.
 
 **OpenAI-kompatible API:** Wenn die Chat-Engine läuft, bietet DJ Gadget einen lokalen OpenAI-kompatiblen Endpunkt unter `http://127.0.0.1:8080/v1`. Jedes OpenAI-kompatible Tool (Aider, Continue, Cursor, Windsurf, eigene Skripte) kann ihn als Backend nutzen — einfach die Base-URL setzen. Kein separater Server nötig.
 

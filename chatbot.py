@@ -151,7 +151,7 @@ def kv_cache_types(n_ctx):
     return "q4_0", "q4_0"
 
 
-def start_server(model_path, n_ctx, threads, extra_flags=""):
+def start_server(model_path, n_ctx, threads, extra_flags="", mcp_proxy=False):
     server_bin = find_llama_server()
     port = port_for_server()
     cache_k, cache_v = kv_cache_types(n_ctx)
@@ -170,9 +170,12 @@ def start_server(model_path, n_ctx, threads, extra_flags=""):
         "--ubatch-size", "64",
         "--flash-attn", "1",
         "--reasoning", "off",
-        "--ui-mcp-proxy",
         "--jinja",
     ]
+    # Der MCP-Proxy lässt den Server im Auftrag der Web-UI fremde Adressen abrufen.
+    # Deshalb nur, wenn der Nutzer ihn im Chat-Tab eingeschaltet hat.
+    if mcp_proxy:
+        cmd.append("--ui-mcp-proxy")
     # Zusätzliche Flags aus der GUI kommen ans Ende – bei doppelten Optionen gilt die letzte.
     if extra_flags and extra_flags.strip():
         try:
@@ -355,8 +358,9 @@ def main_worker():
         top_p = float(args[6]) if len(args) > 6 else 0.95
         top_k = int(args[7]) if len(args) > 7 else 40
         extra_flags = args[8] if len(args) > 8 else ""
+        mcp_proxy = len(args) > 9 and args[9] == "1"
 
-        run_chat_session(m_path, s_prompt, temp, tok, pen, ctx, top_p, top_k, extra_flags)
+        run_chat_session(m_path, s_prompt, temp, tok, pen, ctx, top_p, top_k, extra_flags, mcp_proxy)
 
     # Worker beenden, damit nicht der Fallback-Code unten läuft
     sys.exit(0)
@@ -378,7 +382,7 @@ def _parse_command(line):
     return {"cmd": "chat", "text": text}
 
 
-def run_chat_session(model_path, sys_prompt_text, temperature, max_tokens, repeat_penalty, n_ctx, top_p=0.95, top_k=40, extra_flags=""):
+def run_chat_session(model_path, sys_prompt_text, temperature, max_tokens, repeat_penalty, n_ctx, top_p=0.95, top_k=40, extra_flags="", mcp_proxy=False):
     cpu_count = multiprocessing.cpu_count()
     optimal_threads = max(1, cpu_count - 2)
 
@@ -400,7 +404,9 @@ def run_chat_session(model_path, sys_prompt_text, temperature, max_tokens, repea
         # Stehen Cache-Optionen in den Extra-Flags, gelten die (spätere Angabe gewinnt)
         cache_txt = "set by extra flags" if "--cache-type" in (extra_flags or "") else f"K {cache_k} / V {cache_v}"
         say({"sys": f"🧠 Load Model... (GPU: Metal, Threads: {optimal_threads}, Ctx: {n_ctx}, Cache: {cache_txt})"})
-        proc, port = start_server(model_path, n_ctx, optimal_threads, extra_flags)
+        if mcp_proxy:
+            say({"sys": "🔌 MCP proxy on (Web UI can reach MCP servers)"})
+        proc, port = start_server(model_path, n_ctx, optimal_threads, extra_flags, mcp_proxy)
         if proc is None:
             return
         say({"sys": "✅ READY"})

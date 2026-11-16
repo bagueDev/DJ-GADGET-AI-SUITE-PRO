@@ -194,6 +194,44 @@ def set_chat_extra_flags(flags):
         return False
 
 
+def get_chat_mcp_proxy():
+    """True, wenn der MCP-Proxy des llama-servers eingeschaltet werden soll (Standard: aus)."""
+    try:
+        if not os.path.isfile(CONFIG_FILE):
+            return False
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return (json.load(f) or {}).get("mcp_proxy") is True
+    except Exception as e:
+        log.warning("Could not read %s: %s", CONFIG_FILE, e)
+        return False
+
+
+def set_chat_mcp_proxy(enabled):
+    """Merkt sich den MCP-Proxy-Schalter (aus = Eintrag entfernen)."""
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        data = {}
+        if os.path.isfile(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        enabled = bool(enabled)
+        if enabled == (data.get("mcp_proxy") is True):
+            return True
+        if enabled:
+            data["mcp_proxy"] = True
+        else:
+            data.pop("mcp_proxy", None)
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        log.warning("Could not write %s: %s", CONFIG_FILE, e)
+        return False
+
+
 def read_tags_quick(path):
     # Standardwerte
     info = {

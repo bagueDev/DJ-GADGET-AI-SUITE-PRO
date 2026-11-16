@@ -20,7 +20,8 @@ import webbrowser
 # WICHTIG: RightClickMenu hier importieren
 from helpers import (get_executable_path, export_chat_html, RightClickMenu, get_llama_server_override,
                      set_llama_server_override, clear_llama_server_override,
-                     get_chat_extra_flags, set_chat_extra_flags)
+                     get_chat_extra_flags, set_chat_extra_flags,
+                     get_chat_mcp_proxy, set_chat_mcp_proxy)
 
 # In den Tabs (Analyze, Stems, etc.)
 def get_worker_cmd(worker_type):
@@ -94,6 +95,10 @@ class ChatTab(ctk.CTkFrame):
         self.chat_flags_entry = ctk.CTkEntry(row_flags, placeholder_text="e.g. --cache-type-k q8_0 --cache-type-v q8_0   (applied on 🚀 Start)")
         self.chat_flags_entry.pack(side="left", fill="x", expand=True, padx=5)
         RightClickMenu(self.chat_flags_entry)
+        # MCP-Proxy des llama-servers: nur auf Wunsch (Standard aus), gilt ab dem nächsten 🚀 Start
+        self.chat_mcp_var = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(row_flags, text="🔌 MCP proxy (Web UI)", variable=self.chat_mcp_var,
+                        width=20).pack(side="left", padx=5)
 
         # Row 1: Model
         row1 = ctk.CTkFrame(self, fg_color="transparent")
@@ -228,6 +233,7 @@ class ChatTab(ctk.CTkFrame):
         saved_flags = get_chat_extra_flags()
         if saved_flags:
             self.chat_flags_entry.insert(0, saved_flags)
+        self.chat_mcp_var.set(get_chat_mcp_proxy())
 
     # --- MODEL & PATH LOGIC ---
     def get_default_models_dir(self):
@@ -412,8 +418,10 @@ class ChatTab(ctk.CTkFrame):
         
         flags = self.chat_flags_entry.get().strip()
         set_chat_extra_flags(flags)   # für den nächsten App-Start merken
+        mcp = bool(self.chat_mcp_var.get())
+        set_chat_mcp_proxy(mcp)
         self.is_generating = False
-        threading.Thread(target=self.run_chat_process, args=(path, sys_p, temp, tok, pen, topp, topk, flags), daemon=True).start()
+        threading.Thread(target=self.run_chat_process, args=(path, sys_p, temp, tok, pen, topp, topk, flags, mcp), daemon=True).start()
 
     def open_web_ui(self):
         """Öffnet die native llama.cpp WebUI im Systembrowser."""
@@ -470,7 +478,7 @@ class ChatTab(ctk.CTkFrame):
             except Exception as e:
                 self.update_chat_ui("Error", f"Reset failed ❌: {e}")
 
-    def run_chat_process(self, model_path, sys_prompt, temp, tok, pen, topp=0.95, topk=40, extra_flags=""):
+    def run_chat_process(self, model_path, sys_prompt, temp, tok, pen, topp=0.95, topk=40, extra_flags="", mcp_proxy=False):
            # 1. Index vom Slider holen (0, 1, 2...)
         idx = int(self.slider_n_ctx.get())
             # 2. Echten Context-Wert aus der Liste ziehen
@@ -496,6 +504,7 @@ class ChatTab(ctk.CTkFrame):
             str(topp),
             str(int(topk)),
             extra_flags,
+            "1" if mcp_proxy else "0",
         ])
             
         try:
