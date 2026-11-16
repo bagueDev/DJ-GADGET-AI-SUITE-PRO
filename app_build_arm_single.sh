@@ -53,6 +53,8 @@ echo -e "${GREEN}🔨 Baue Single-Binary-App...${NC}"
     --collect-all "demucs" \
     --collect-all "demucs_mlx" \
     --collect-all "mlx" \
+    --collect-all "mlx_audio_io" \
+    --collect-all "mlx_spectro" \
     --collect-all "safetensors" \
     --collect-all "faster_whisper" \
     --collect-all "numpy" \

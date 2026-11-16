@@ -89,10 +89,28 @@ def run_torch_separation(file_path, output_dir, model="htdemucs", keep_stems="al
         _filter_keep_stems(_track_dir(output_dir, model, file_path), keep_stems)
 
 
+def _allow_bundled_mlx_audio():
+    """Nur in der gebauten App: Prüfsummen-Vergleich von mlx-audio-io überspringen.
+
+    mlx-audio-io vergleicht seine native Bibliothek mit der Prüfsumme aus der pip-Installation.
+    Beim Bauen signiert PyInstaller (und danach codesign) jede Bibliothek neu, die Datei ändert
+    sich also und der Vergleich schlägt immer fehl. Die Signaturprüfung der Bibliothek selbst
+    (codesign --verify) bleibt aktiv.
+    """
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        from mlx_audio_io import _native_loader
+        _native_loader.verify_record_hash = lambda native_path: None
+    except Exception as e:
+        print(f"--- mlx-audio-io: Vorbereitung übersprungen ({e}) ---")
+
+
 def run_mlx_separation(file_path, output_dir, model="htdemucs", keep_stems="all",
                        offline_dir=None, two_stems=False, other_method="add"):
     import numpy as np
     import soundfile as sf
+    _allow_bundled_mlx_audio()
     from demucs_mlx import Separator
 
     repo = None
