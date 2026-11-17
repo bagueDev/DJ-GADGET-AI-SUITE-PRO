@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.3.1] - 2026-11-11
+## [3.3.1] - 2026-11-17
 
 ### 🎲 Melody Lab – Seed & reproduzierbare Ergebnisse (🎹)
 - **Seed-Feld + 🔒 Lock** – ohne Lock würfelt jedes Generate / Full Loop einen neuen Seed (0–999999) und schreibt ihn ins Feld; mit Lock ergibt gleicher Seed + gleiche Einstellungen exakt dieselbe MIDI- und WAV-Datei (auch über Programmstarts hinweg).
