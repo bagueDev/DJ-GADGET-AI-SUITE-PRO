@@ -16,6 +16,10 @@ Library, sampler, stem separation, transcription, melody & MIDI generator and a 
 
 [Deutsche Version](README.de.md)
 
+<a href="https://youtube.com/shorts/aAOCQz_gQw0"><img src="https://img.youtube.com/vi/aAOCQz_gQw0/maxresdefault.jpg" alt="DJ Gadget AI-Suite Pro – promo video on YouTube" width="560"></a>
+
+▶️ **[Watch the promo video on YouTube](https://youtube.com/shorts/aAOCQz_gQw0)**
+
 </div>
 
 ![DJ Gadget AI-Suite Pro – Player & Sampler](docs/screenshots/player-sampler.png)
