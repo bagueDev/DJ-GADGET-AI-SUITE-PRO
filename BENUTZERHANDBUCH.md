@@ -2,7 +2,7 @@
 
 **Version 3.3.1 · November 2026 · Developed by @bagueDev · Kontakt: achten.enteral.5z@icloud.com**
 
-Dieses Handbuch vereint die bisherigen Einzel-Handbücher (v1.0, v1.4, v1.5, v1.6.3, V2.0) in einem Dokument und ist auf Stand v3.3.1 aktualisiert. Die Originale liegen im Ordner `Doku und Handbuch/Archiv/`. Detail-Changelogs (v1.5, v1.7, v1.8, v2.0) liegen separat als `.docx`.
+Dieses Handbuch vereint die bisherigen Einzel-Handbücher (v1.0, v1.4, v1.5, v1.6.3, V2.0) in einem Dokument und ist auf Stand v3.3.1 aktualisiert. Alle Änderungen pro Version stehen im [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -214,7 +214,7 @@ Stems (Vocals) → Analyzer (exakte BPM) → Transcriber (Text) → Melody-Conve
 
 ## Anhang: Versionen & Quellen
 
-Zusammengeführt aus: Benutzerhandbuch v1.6.3 (Gerüst), DAS HANDBUCH v1.4 (MelodyLab/Workflows/FAQ), v1.5-Handbuch (Batch/Sampler/Tag-FAQ), V2.0-PDF (Performance/Ordnerstruktur), V1.0-PDF (Grundlagen). Originale: Ordner `Doku und Handbuch/Archiv/`. Detail-Changelogs (v1.5, v1.7, v1.8, v2.0) liegen separat.
+Zusammengeführt aus: Benutzerhandbuch v1.6.3 (Gerüst), DAS HANDBUCH v1.4 (MelodyLab/Workflows/FAQ), v1.5-Handbuch (Batch/Sampler/Tag-FAQ), V2.0-PDF (Performance/Ordnerstruktur), V1.0-PDF (Grundlagen).
 
 ---
 
