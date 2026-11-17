@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/icon.png" alt="DJ Gadget AI-Suite Pro app icon" width="128">
+
 # 🎧 DJ Gadget AI-Suite Pro
 
 ### Your player is a sampler. Hear it. Loop it. Split it. Ask about it.
