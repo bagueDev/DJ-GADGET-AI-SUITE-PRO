@@ -168,6 +168,43 @@ def detect_key_advanced(y, sr):
             best_key = (pitches[i], "minor")
     return best_key    
 
+def _pulse_scores(env, t, cands):
+    """Wie regelmäßig die Einsätze (env) bei jedem Kandidaten-Tempo wiederkehren, mit Obertönen."""
+    cands = np.atleast_1d(np.asarray(cands, dtype=float))
+    score = np.zeros(len(cands))
+    for i in range(0, len(cands), 64):  # in Blöcken, damit der Speicher klein bleibt
+        block = cands[i:i + 64, None] / 60.0
+        for harmonic, weight in ((1, 1.0), (2, 0.7), (4, 0.5)):
+            phase = -2j * np.pi * harmonic * block * t[None, :]
+            score[i:i + 64] += weight * np.abs((env[None, :] * np.exp(phase)).sum(axis=1))
+    return score
+
+
+def _related_tempo(env, t, bpm):
+    """Prüft, ob librosa auf ein verwandtes Tempo eingerastet ist (z. B. 2/3: 113 statt 170).
+
+    Gesucht wird der stärkste Puls zwischen 60 und 200 BPM. Ist er kein Oktav-Verwandter von bpm,
+    ein klarer, scharfer Peak und deutlich stärker als bpm selbst, gilt er, in die Oktave
+    verschoben, die bpm am nächsten liegt (also 85 statt 170, wenn bpm 113 war). Tracks mit
+    Tempowechsel oder Drift haben keinen scharfen Peak und bleiben unverändert.
+    """
+    wide = np.arange(60.0, 200.0, 0.25)
+    ws = _pulse_scores(env, t, wide)
+    peak = float(wide[int(np.argmax(ws))])
+    cands = np.arange(peak * 0.996, peak * 1.004, 0.02)
+    s = _pulse_scores(env, t, cands)
+    peak, s_peak = float(cands[int(np.argmax(s))]), float(s.max())
+    if min(abs(np.log2(peak / bpm) - k) for k in (-1, 0, 1)) < 0.03:
+        return bpm                                  # gleiches Tempo oder halb/doppelt
+    if s_peak / (np.median(ws) + 1e-9) < 20.0:
+        return bpm                                  # kein eindeutiger Puls
+    s_bpm = max(_pulse_scores(env, t, np.arange(v * 0.99, v * 1.01, 0.02)).max()
+                for v in (bpm / 2, bpm, bpm * 2) if 55.0 <= v <= 210.0)
+    if s_peak < 1.5 * s_bpm:
+        return bpm
+    return min((peak / 2, peak, peak * 2), key=lambda v: abs(np.log(v / bpm)))
+
+
 def refine_bpm(y, sr, coarse_bpm, beat_times=None, hop_length=512):
     """Verfeinert das Tempo aus librosa.beat.beat_track.
 
@@ -176,6 +213,9 @@ def refine_bpm(y, sr, coarse_bpm, beat_times=None, hop_length=512):
     in 0.02-BPM-Schritten gesucht, bei welchem Tempo die Einsätze des Stücks am regelmäßigsten
     wiederkehren. Ist das Ergebnis nicht eindeutig (Gesang, Flächen, wechselndes Tempo), gilt der
     mittlere Abstand der gefundenen Beats, sonst der Rohwert.
+
+    Manchmal rastet beat_track auf ein verwandtes Tempo ein (DnB mit 170 BPM als 112.35 oder
+    117.45). Das fängt _related_tempo ab.
     """
     coarse = float(coarse_bpm)
     if not np.isfinite(coarse) or coarse <= 0:
@@ -191,6 +231,7 @@ def refine_bpm(y, sr, coarse_bpm, beat_times=None, hop_length=512):
                 regression = None   # Beats sind gesprungen, nicht verwenden
 
     fine = quality = None
+    env = t = None
     try:
         env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length)
         fps = sr / hop_length
@@ -198,16 +239,13 @@ def refine_bpm(y, sr, coarse_bpm, beat_times=None, hop_length=512):
         if len(env) > max_frames:
             start = (len(env) - max_frames) // 2
             env = env[start:start + max_frames]
-        if len(env) >= int(20 * fps):           # unter 20 s zu wenig Material
+        if len(env) < int(20 * fps):            # unter 20 s zu wenig Material
+            env = None
+        else:
             env = env - env.mean()
             t = np.arange(len(env)) / fps
             cands = np.arange(coarse * 0.94, coarse * 1.06, 0.02)
-            score = np.zeros(len(cands))
-            for i in range(0, len(cands), 64):  # in Blöcken, damit der Speicher klein bleibt
-                block = cands[i:i + 64, None] / 60.0
-                for harmonic, weight in ((1, 1.0), (2, 0.7), (4, 0.5)):
-                    phase = -2j * np.pi * harmonic * block * t[None, :]
-                    score[i:i + 64] += weight * np.abs((env[None, :] * np.exp(phase)).sum(axis=1))
+            score = _pulse_scores(env, t, cands)
             best = int(np.argmax(score))
             at_edge = best < 3 or best > len(cands) - 4
             far = np.abs(cands - cands[best]) > cands[best] * 0.005
@@ -219,12 +257,20 @@ def refine_bpm(y, sr, coarse_bpm, beat_times=None, hop_length=512):
                 quality = float(score[best] / (np.median(score[far]) + 1e-9))
     except Exception as e:
         print(f"BPM refine skipped: {e}", file=sys.stderr)
+        env = None
 
     if fine is not None and (quality >= 8.0 or (regression is not None and abs(fine - regression) <= fine * 0.003)):
         bpm = fine
     elif regression is not None:
         bpm = regression
     else:
+        bpm = coarse
+    if env is not None:
+        try:
+            bpm = _related_tempo(env, t, bpm)
+        except Exception as e:
+            print(f"BPM related-tempo check skipped: {e}", file=sys.stderr)
+    if bpm == coarse:
         return coarse
     # Messgenauigkeit ist etwa ±0.02 BPM: knapp neben einer ganzen Zahl heißt ganze Zahl
     if abs(bpm - round(bpm)) <= 0.03:

@@ -67,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔍 Playlist & BPM – genaueres Tempo (🔍)
 - **BPM rastete auf grobe Stufen ein** – die Erkennung lieferte nur Rasterwerte (117.45, 123.05, 129.20, 172.27 …): Tracks mit 122 bis 126 BPM zeigten alle 123.05, und Auto-Tag schrieb diesen Wert in die Datei. Das Tempo wird jetzt um den Rohwert herum fein nachgemessen (Klick-Tracks mit 120/124/125/126/128 BPM: exakt). Bei Material ohne klaren Puls bleibt der bisherige Wert. Halbes Tempo (z. B. 87 statt 174) kann weiterhin vorkommen – dafür Min-BPM oder „BPM (2x)".
+- **Falsches Tempo bei DnB (112 / 117 statt 85 / 87)** – die Erkennung rastete bei manchen Tracks auf 2/3 des Tempos ein (170 BPM als 112.35 oder 117.45). Jetzt wird zusätzlich der stärkste Puls im ganzen Bereich 60–200 BPM gesucht; ist er eindeutig und viel stärker, gilt er (in der Oktave des Rohwerts, also 85 statt 170). Bei 85 DnB-Tracks lagen vorher 27 daneben, jetzt keiner; von 250 Tracks anderer Genres änderten sich nur 2 (beide vorher falsch). Tracks mit Tempowechsel oder Triolen-Shuffle bleiben unverändert.
 
 ### ✏️ Metadata Editor & Auto-Tag – ehrliche Rückmeldung, fehlende Felder (✏️)
 - **Open Key stimmte nicht** – die Statuszeile zeigte die Camelot-Zahl mit anderem Buchstaben (9B → „9d"). Open Key zählt ab C-Dur: 8B ist 1d, 9B ist 2d.
