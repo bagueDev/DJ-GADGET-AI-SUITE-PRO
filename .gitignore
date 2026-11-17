@@ -52,3 +52,6 @@ temp_melody/
 
 # Local test suite (kept out of the repository)
 tests/
+
+# Private docs, archive and duplicates (published docs live in docs/)
+Doku und Handbuch/
