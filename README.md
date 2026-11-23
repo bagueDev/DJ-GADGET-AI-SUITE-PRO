@@ -18,9 +18,10 @@ Library, sampler, stem separation, transcription, melody & MIDI generator and a 
 
 [Deutsche Version](README.de.md)
 
-<a href="https://youtube.com/shorts/aAOCQz_gQw0"><img src="https://img.youtube.com/vi/aAOCQz_gQw0/maxresdefault.jpg" alt="DJ Gadget AI-Suite Pro – promo video on YouTube" width="560"></a>
+<a href="https://youtube.com/shorts/aAOCQz_gQw0"><img src="https://img.youtube.com/vi/aAOCQz_gQw0/maxresdefault.jpg" alt="DJ Gadget AI-Suite Pro – promo video on YouTube" width="400"></a>
+<a href="https://youtube.com/shorts/QWyDC2p3mSE"><img src="https://img.youtube.com/vi/QWyDC2p3mSE/maxresdefault.jpg" alt="DJ Gadget AI-Suite Pro – sampler vs. DAW video on YouTube" width="400"></a>
 
-▶️ **[Watch the promo video on YouTube](https://youtube.com/shorts/aAOCQz_gQw0)**
+▶️ **Watch on YouTube:** [Promo – BPM · Key · MIDI](https://youtube.com/shorts/aAOCQz_gQw0) · [2 ways, same sample – sampler vs. DAW](https://youtube.com/shorts/QWyDC2p3mSE)
 
 </div>
 
